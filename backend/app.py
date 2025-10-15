@@ -283,7 +283,6 @@ def delete_shift(id):
 
 @app.route('/time-off', methods=['GET'])
 def get_time_off_requests():
-    """Get all time-off requests with optional filters"""
     try:
         status = request.args.get('status')
         staff_id = request.args.get('staff_id')
@@ -303,7 +302,6 @@ def get_time_off_requests():
 
 @app.route('/time-off/<int:id>', methods=['GET'])
 def get_time_off_request_by_id(id):
-    """Get single time-off request"""
     try:
         request_obj = TimeOffRequest.query.get_or_404(id)
         return jsonify(request_obj.to_dict()), 200
@@ -313,7 +311,6 @@ def get_time_off_request_by_id(id):
 
 @app.route('/time-off', methods=['POST'])
 def create_time_off_request():
-    """Create new time-off request"""
     try:
         data = request.get_json()
         
@@ -336,7 +333,6 @@ def create_time_off_request():
 
 @app.route('/time-off/<int:id>', methods=['PUT'])
 def update_time_off_request(id):
-    """Update time-off request (mainly for approving/denying)"""
     try:
         request_obj = TimeOffRequest.query.get_or_404(id)
         data = request.get_json()
@@ -358,7 +354,6 @@ def update_time_off_request(id):
 
 @app.route('/time-off/<int:id>', methods=['DELETE'])
 def delete_time_off_request(id):
-    """Delete time-off request"""
     try:
         request_obj = TimeOffRequest.query.get_or_404(id)
         db.session.delete(request_obj)
