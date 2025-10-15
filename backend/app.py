@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_migrate import Migrate
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 from models import Staff, StaffArea, Shift, TimeOffRequest, AISuggestion
 from db import db
 import os
@@ -16,7 +16,7 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
 
 db.init_app(app)
 migrate = Migrate(app, db)
-CORS(app)
+CORS(app, origins=["http://localhost:3000", "http://127.0.0.1:3000"], allow_headers="*", methods=["GET", "POST", "PUT", "DELETE"])
 
 
 @app.route('/')
