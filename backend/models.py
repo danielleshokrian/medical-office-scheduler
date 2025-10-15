@@ -1,7 +1,6 @@
-from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
-
-db = SQLAlchemy()
+from db import db
+from sqlalchemy.orm import validates
+from datetime import datetime, time
 
 class Staff(db.Model):
     __tablename__ = 'staff'
@@ -11,14 +10,39 @@ class Staff(db.Model):
     role = db.Column(db.String(50), nullable=False)  # 'RN', 'GI_Tech', 'Scope_Tech'
     shift_length = db.Column(db.Integer, nullable=False)  # 8 or 10 hours
     days_per_week = db.Column(db.Integer, nullable=False)  # 4 or 5 days
-    start_time = db.Column(db.Time, nullable=True)  
+    start_time = db.Column(db.Time, nullable=True)
     is_per_diem = db.Column(db.Boolean, default=False)
-    area_restrictions = db.Column(db.String(200), nullable=True)  # JSON string like '["Recovery"]' or '["Any"]'
-    required_day_off = db.Column(db.String(50), nullable=True)  
+    area_restrictions = db.Column(db.String(200), nullable=True)
+    required_day_off = db.Column(db.String(50), nullable=True)
     is_active = db.Column(db.Boolean, default=True)
     
-    shifts = db.relationship('Shift', backref='staff_member', cascade='all, delete-orphan', lazy=True)
-    time_off_requests = db.relationship('TimeOffRequest', backref='staff_member', cascade='all, delete-orphan', lazy=True)
+    shifts = db.relationship('Shift', back_populates='staff_member', cascade='all, delete-orphan')
+    time_off_requests = db.relationship('TimeOffRequest', back_populates='staff_member', cascade='all, delete-orphan')
+    
+    @validates('name')
+    def validate_name(self, key, value):
+        if not value or not value.strip():
+            raise ValueError("Name cannot be empty")
+        return value
+    
+    @validates('role')
+    def validate_role(self, key, value):
+        valid_roles = ['RN', 'GI_Tech', 'Scope_Tech']
+        if value not in valid_roles:
+            raise ValueError(f"Role must be one of: {', '.join(valid_roles)}")
+        return value
+    
+    @validates('shift_length')
+    def validate_shift_length(self, key, value):
+        if value not in [8, 10]:
+            raise ValueError("Shift length must be 8 or 10 hours")
+        return value
+    
+    @validates('days_per_week')
+    def validate_days_per_week(self, key, value):
+        if value not in [4, 5]:
+            raise ValueError("Days per week must be 4 or 5")
+        return value
     
     def to_dict(self):
         return {
@@ -39,13 +63,19 @@ class StaffArea(db.Model):
     __tablename__ = 'staff_area'
     
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False, unique=True)  # 'Admitting', 'Recovery', etc.
+    name = db.Column(db.String(100), nullable=False, unique=True)
     required_rn_count = db.Column(db.Integer, default=0)
     required_tech_count = db.Column(db.Integer, default=0)
     required_scope_tech_count = db.Column(db.Integer, default=0)
-    special_rules = db.Column(db.Text, nullable=True)  
+    special_rules = db.Column(db.Text, nullable=True)
     
-    shifts = db.relationship('Shift', backref='area', cascade='all, delete-orphan', lazy=True)
+    shifts = db.relationship('Shift', back_populates='area', cascade='all, delete-orphan')
+    
+    @validates('name')
+    def validate_name(self, key, value):
+        if not value or not value.strip():
+            raise ValueError("Area name cannot be empty")
+        return value
     
     def to_dict(self):
         return {
@@ -69,6 +99,16 @@ class Shift(db.Model):
     end_time = db.Column(db.Time, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+    staff_member = db.relationship('Staff', back_populates='shifts')
+    area = db.relationship('StaffArea', back_populates='shifts')
+    
+    @validates('date')
+    def validate_date(self, key, value):
+        from datetime import date
+        if not isinstance(value, date):
+            raise ValueError("date must be a datetime.date object")
+        return value
+    
     def to_dict(self):
         return {
             'id': self.id,
@@ -91,8 +131,18 @@ class TimeOffRequest(db.Model):
     start_date = db.Column(db.Date, nullable=False)
     end_date = db.Column(db.Date, nullable=False)
     reason = db.Column(db.String(200), nullable=True)
-    status = db.Column(db.String(20), default='pending')  # 'pending', 'approved', 'denied'
+    status = db.Column(db.String(20), default='pending')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    
+    staff_member = db.relationship('Staff', back_populates='time_off_requests')
+    
+    @validates('status')
+    def validate_status(self, key, value):
+        valid_statuses = ['pending', 'approved', 'denied']
+        if value not in valid_statuses:
+            raise ValueError(f"Status must be one of: {', '.join(valid_statuses)}")
+        return value
     
     def to_dict(self):
         return {
@@ -112,9 +162,9 @@ class AISuggestion(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     week_start_date = db.Column(db.Date, nullable=False)
-    suggested_schedule = db.Column(db.Text, nullable=False)  
-    reasoning = db.Column(db.Text, nullable=True)  
-    constraints_met = db.Column(db.Text, nullable=True)  
+    suggested_schedule = db.Column(db.Text, nullable=False)
+    reasoning = db.Column(db.Text, nullable=True)
+    constraints_met = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     accepted = db.Column(db.Boolean, default=False)
     
