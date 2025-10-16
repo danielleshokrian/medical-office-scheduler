@@ -1,0 +1,136 @@
+.schedule-container {
+  padding: 20px;
+}
+
+.schedule-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.schedule-header h2 {
+  margin: 0;
+  color: #2c3e50;
+}
+
+.schedule-header button {
+  padding: 10px 20px;
+  background: #3498db;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.schedule-header button:hover {
+  background: #2980b9;
+}
+
+.schedule-grid {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.grid-header {
+  display: grid;
+  grid-template-columns: 200px repeat(5, 1fr);
+  background: #34495e;
+  color: white;
+  font-weight: bold;
+}
+
+.area-label {
+  padding: 15px;
+  border-right: 1px solid #2c3e50;
+}
+
+.day-header {
+  padding: 15px;
+  text-align: center;
+  border-right: 1px solid #2c3e50;
+}
+
+.day-header:last-child {
+  border-right: none;
+}
+
+.day-name {
+  font-size: 16px;
+  margin-bottom: 5px;
+}
+
+.day-date {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.area-row {
+  display: grid;
+  grid-template-columns: 200px repeat(5, 1fr);
+  border-top: 1px solid #ddd;
+}
+
+.area-name {
+  padding: 15px;
+  background: #ecf0f1;
+  font-weight: 600;
+  border-right: 1px solid #ddd;
+  display: flex;
+  align-items: center;
+}
+
+.schedule-cell {
+  padding: 10px;
+  border-right: 1px solid #ddd;
+  min-height: 100px;
+  background: white;
+}
+
+.schedule-cell:last-child {
+  border-right: none;
+}
+
+.empty-cell {
+  color: #95a5a6;
+  font-style: italic;
+  text-align: center;
+  padding: 20px 10px;
+}
+
+.shift-card {
+  background: #3498db;
+  color: white;
+  padding: 8px;
+  border-radius: 4px;
+  margin-bottom: 5px;
+  font-size: 13px;
+}
+
+.shift-card:last-child {
+  margin-bottom: 0;
+}
+
+.staff-name {
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+
+.shift-time {
+  font-size: 11px;
+  opacity: 0.9;
+}
+
+.loading, .error {
+  text-align: center;
+  padding: 40px;
+  font-size: 18px;
+}
+
+.error {
+  color: #e74c3c;
+}
