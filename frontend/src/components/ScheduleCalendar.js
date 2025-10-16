@@ -7,6 +7,9 @@ function ScheduleCalendar() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentWeek, setCurrentWeek] = useState(getMonday(new Date()));
+  const [viewMode, setViewMode] = useState('week'); // 'week' or 'day'
+  const [selectedDate, setSelectedDate] = useState(new Date());
+
 
   function getMonday(date) {
     const d = new Date(date);
@@ -57,6 +60,11 @@ function ScheduleCalendar() {
     );
   };
 
+  const getShiftsForDate = (date) => {
+    const dateStr = date.toISOString().split('T')[0];
+    return shifts.filter(shift => shift.date === dateStr);
+  };
+
   const goToPreviousWeek = () => {
     const newWeek = new Date(currentWeek);
     newWeek.setDate(currentWeek.getDate() - 7);
@@ -73,51 +81,192 @@ function ScheduleCalendar() {
     setCurrentWeek(getMonday(new Date()));
   };
 
+  const switchToDayView = (date) => {
+    setSelectedDate(date);
+    setViewMode('day');
+  };
+
+  const switchToWeekView = () => {
+    setViewMode('week');
+  };
+
+  const generateTimeSlots = () => {
+    const slots = [];
+    for (let hour = 6; hour <= 18; hour++) {
+      for (let minute = 0; minute < 60; minute += 15) {
+        const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        slots.push(time);
+      }
+    }
+    return slots;
+  };
+
+  const timeSlots = generateTimeSlots();
+
+  // Position and height for shift box in calendar
+  const calculateShiftPosition = (startTime, endTime) => {
+    const parseTime = (time) => {
+      const [hours, minutes] = time.split(':').map(Number);
+      return hours * 60 + minutes;
+    };
+
+    const startMinutes = parseTime(startTime);
+    const endMinutes = parseTime(endTime);
+    const baseMinutes = 6 * 60; 
+
+    const top = ((startMinutes - baseMinutes) / 15) * 30; 
+    const height = ((endMinutes - startMinutes) / 15) * 30;
+
+    return { top, height };
+  };
+
+  const getStaffColor = (role) => {
+    const colors = {
+      'RN': '#3498db',
+      'GI_Tech': '#2ecc71',
+      'Scope_Tech': '#e74c3c'
+    };
+    return colors[role] || '#95a5a6';
+  };
+
   if (loading) return <div className="loading">Loading schedule...</div>;
   if (error) return <div className="error">Error: {error}</div>;
 
+  if (viewMode === 'week') {
+    return (
+      <div className="schedule-container">
+        <div className="schedule-header">
+          <button onClick={goToPreviousWeek}>← Previous Week</button>
+          <h2>Week of {currentWeek.toLocaleDateString()}</h2>
+          <button onClick={goToNextWeek}>Next Week →</button>
+          <button onClick={goToCurrentWeek}>Today</button>
+        </div>
+
+        <div className="schedule-grid">
+          <div className="grid-header">
+            <div className="area-label">Area</div>
+            {weekDates.map(date => (
+              <div 
+                key={date.toISOString()} 
+                className="day-header clickable"
+                onClick={() => switchToDayView(date)}
+              >
+                <div className="day-name">{date.toLocaleDateString('en-US', { weekday: 'short' })}</div>
+                <div className="day-date">{date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })}</div>
+                <div className="view-detail">View Details →</div>
+              </div>
+            ))}
+          </div>
+
+          {areas.map(area => (
+            <div key={area.id} className="area-row">
+              <div className="area-name">{area.name}</div>
+              {weekDates.map(date => {
+                const areaShifts = getShiftsForAreaAndDate(area.id, date);
+                return (
+                  <div 
+                    key={`${area.id}-${date.toISOString()}`} 
+                    className="schedule-cell"
+                    onClick={() => switchToDayView(date)}
+                  >
+                    {areaShifts.length === 0 ? (
+                      <div className="empty-cell">Not Staffed</div>
+                    ) : (
+                      areaShifts.map(shift => (
+                        <div 
+                          key={shift.id} 
+                          className="shift-card"
+                          style={{ background: getStaffColor(shift.staff_role) }}
+                        >
+                          <div className="staff-name">{shift.staff_name}</div>
+                          <div className="shift-time">{shift.start_time} - {shift.end_time}</div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const dayShifts = getShiftsForDate(selectedDate);
+  
   return (
     <div className="schedule-container">
       <div className="schedule-header">
-        <button onClick={goToPreviousWeek}>← Previous Week</button>
-        <h2>Week of {currentWeek.toLocaleDateString()}</h2>
-        <button onClick={goToNextWeek}>Next Week →</button>
-        <button onClick={goToCurrentWeek}>Today</button>
+        <button onClick={switchToWeekView}>← Back to Week View</button>
+        <h2>{selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</h2>
       </div>
 
-      <div className="schedule-grid">
-        <div className="grid-header">
-          <div className="area-label">Area</div>
-          {weekDates.map(date => (
-            <div key={date.toISOString()} className="day-header">
-              <div className="day-name">{date.toLocaleDateString('en-US', { weekday: 'short' })}</div>
-              <div className="day-date">{date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })}</div>
+      <div className="timeline-view">
+        <div className="timeline-header">
+          <div className="time-column-header">Time</div>
+          {areas.map(area => (
+            <div key={area.id} className="area-column-header">
+              {area.name}
             </div>
           ))}
         </div>
 
-        {areas.map(area => (
-          <div key={area.id} className="area-row">
-            <div className="area-name">{area.name}</div>
-            {weekDates.map(date => {
-              const areaShifts = getShiftsForAreaAndDate(area.id, date);
-              return (
-                <div key={`${area.id}-${date.toISOString()}`} className="schedule-cell">
-                  {areaShifts.length === 0 ? (
-                    <div className="empty-cell">Not Staffed</div>
-                  ) : (
-                    areaShifts.map(shift => (
-                      <div key={shift.id} className="shift-card">
-                        <div className="staff-name">{shift.staff_name}</div>
-                        <div className="shift-time">{shift.start_time} - {shift.end_time}</div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              );
-            })}
+        <div className="timeline-body">
+          <div className="time-column">
+            {timeSlots.map(time => (
+              <div key={time} className="time-slot">{time}</div>
+            ))}
           </div>
-        ))}
+
+          {areas.map(area => {
+            const areaShifts = getShiftsForAreaAndDate(area.id, selectedDate);
+            return (
+              <div key={area.id} className="area-column">
+                <div className="shifts-container">
+                  {areaShifts.map(shift => {
+                    const { top, height } = calculateShiftPosition(shift.start_time, shift.end_time);
+                    return (
+                      <div
+                        key={shift.id}
+                        className="timeline-shift-box"
+                        style={{
+                          top: `${top}px`,
+                          height: `${height}px`,
+                          background: getStaffColor(shift.staff_role)
+                        }}
+                      >
+                        <div className="timeline-staff-name">{shift.staff_name}</div>
+                        <div className="timeline-staff-role">{shift.staff_role}</div>
+                        <div className="timeline-shift-time">
+                          {shift.start_time} - {shift.end_time}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="legend">
+        <h3>Legend:</h3>
+        <div className="legend-items">
+          <div className="legend-item">
+            <div className="legend-color" style={{ background: '#3498db' }}></div>
+            <span>RN</span>
+          </div>
+          <div className="legend-item">
+            <div className="legend-color" style={{ background: '#2ecc71' }}></div>
+            <span>GI Tech</span>
+          </div>
+          <div className="legend-item">
+            <div className="legend-color" style={{ background: '#e74c3c' }}></div>
+            <span>Scope Tech</span>
+          </div>
+        </div>
       </div>
     </div>
   );
