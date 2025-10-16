@@ -53,6 +53,27 @@ function ScheduleCalendar() {
     }
   };
 
+  const getStaffColor = (staffId, role) => {
+    const colorPalettes = {
+    'RN': [
+      '#3498db', '#5dade2', '#2874a6', '#1f618d', '#21618c',
+      '#2e86c1', '#3498db', '#5dade2', '#85c1e9', '#aed6f1'
+    ],
+    'GI_Tech': [
+      '#2ecc71', '#58d68d', '#27ae60', '#229954', '#1e8449',
+      '#28b463', '#52be80', '#7dcea0', '#a9dfbf', '#d4efdf'
+    ],
+    'Scope_Tech': [
+      '#e74c3c', '#ec7063', '#cb4335', '#c0392b', '#a93226',
+      '#e67e22', '#f39c12', '#f8b739', '#fad7a0', '#fdebd0'
+    ]
+  };
+
+  const palette = colorPalettes[role] || ['#95a5a6', '#7f8c8d', '#bdc3c7'];
+  const colorIndex = staffId % palette.length;
+  return palette[colorIndex];
+};
+
   const getShiftsForAreaAndDate = (areaId, date) => {
     const dateStr = date.toISOString().split('T')[0];
     return shifts.filter(shift => 
@@ -120,15 +141,6 @@ function ScheduleCalendar() {
     return { top, height };
   };
 
-  const getStaffColor = (role) => {
-    const colors = {
-      'RN': '#3498db',
-      'GI_Tech': '#2ecc71',
-      'Scope_Tech': '#e74c3c'
-    };
-    return colors[role] || '#95a5a6';
-  };
-
   if (loading) return <div className="loading">Loading schedule...</div>;
   if (error) return <div className="error">Error: {error}</div>;
 
@@ -176,7 +188,7 @@ function ScheduleCalendar() {
                         <div 
                           key={shift.id} 
                           className="shift-card"
-                          style={{ background: getStaffColor(shift.staff_role) }}
+                          style={{ background: getStaffColor(shift.staff_id, shift.staff_role) }}
                         >
                           <div className="staff-name">{shift.staff_name}</div>
                           <div className="shift-time">{shift.start_time} - {shift.end_time}</div>
@@ -233,7 +245,7 @@ function ScheduleCalendar() {
                         style={{
                           top: `${top}px`,
                           height: `${height}px`,
-                          background: getStaffColor(shift.staff_role)
+                          background: getStaffColor(shift.staff_id, shift.staff_role)
                         }}
                       >
                         <div className="timeline-staff-name">{shift.staff_name}</div>
@@ -254,18 +266,20 @@ function ScheduleCalendar() {
       <div className="legend">
         <h3>Legend:</h3>
         <div className="legend-items">
-          <div className="legend-item">
-            <div className="legend-color" style={{ background: '#3498db' }}></div>
-            <span>RN</span>
-          </div>
-          <div className="legend-item">
-            <div className="legend-color" style={{ background: '#2ecc71' }}></div>
-            <span>GI Tech</span>
-          </div>
-          <div className="legend-item">
-            <div className="legend-color" style={{ background: '#e74c3c' }}></div>
-            <span>Scope Tech</span>
-          </div>
+          {Array.from(new Set(
+            (viewMode === 'week' ? shifts : dayShifts).map(s => s.staff_id)
+          )).map(staffId => {
+            const shift = (viewMode === 'week' ? shifts : dayShifts).find(s => s.staff_id === staffId);
+            return (
+              <div key={staffId} className="legend-item">
+                <div 
+                  className="legend-color" 
+                  style={{ background: getStaffColor(staffId, shift.staff_role) }}
+                ></div>
+                <span>{shift.staff_name} ({shift.staff_role})</span>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
