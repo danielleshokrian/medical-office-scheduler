@@ -288,3 +288,21 @@
 .error {
   color: #e74c3c;
 }
+
+.add-shift-button {
+  background: #2ecc71 !important;
+}
+
+.add-shift-button:hover {
+  background: #27ae60 !important;
+}
+
+.clickable-shift {
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.clickable-shift:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}

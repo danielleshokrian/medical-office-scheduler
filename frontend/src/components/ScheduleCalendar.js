@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './ScheduleCalendar.css';
+import ShiftForm from './ShiftForm';
 
 function ScheduleCalendar() {
   const [shifts, setShifts] = useState([]);
@@ -9,6 +10,10 @@ function ScheduleCalendar() {
   const [currentWeek, setCurrentWeek] = useState(getMonday(new Date()));
   const [viewMode, setViewMode] = useState('week'); // 'week' or 'day'
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showShiftForm, setShowShiftForm] = useState(false);
+  const [selectedShift, setSelectedShift] = useState(null);
+  const [selectedDateForForm, setSelectedDateForForm] = useState(null);
+  const [staff, setStaff] = useState([]);
 
 
   function getMonday(date) {
@@ -31,27 +36,35 @@ function ScheduleCalendar() {
   useEffect(() => {
     fetchScheduleData();
   }, [currentWeek]);
-
-  const fetchScheduleData = async () => {
-    try {
-      setLoading(true);
       
-      const areasResponse = await fetch('http://127.0.0.1:5000/areas');
-      if (!areasResponse.ok) throw new Error('Failed to fetch areas');
-      const areasData = await areasResponse.json();
-      setAreas(areasData);
-      
-      const shiftsResponse = await fetch('http://127.0.0.1:5000/shifts');
-      if (!shiftsResponse.ok) throw new Error('Failed to fetch shifts');
-      const shiftsData = await shiftsResponse.json();
-      setShifts(shiftsData);
-      
-      setLoading(false);
-    } catch (err) {
-      setError(err.message);
-      setLoading(false);
-    }
-  };
+const fetchScheduleData = async () => {
+  try {
+    setLoading(true);
+    
+    const [areasResponse, shiftsResponse, staffResponse] = await Promise.all([
+      fetch('http://127.0.0.1:5000/areas'),
+      fetch('http://127.0.0.1:5000/shifts'),
+      fetch('http://127.0.0.1:5000/staff')
+    ]);
+    
+    if (!areasResponse.ok) throw new Error('Failed to fetch areas');
+    if (!shiftsResponse.ok) throw new Error('Failed to fetch shifts');
+    if (!staffResponse.ok) throw new Error('Failed to fetch staff');
+    
+    const areasData = await areasResponse.json();
+    const shiftsData = await shiftsResponse.json();
+    const staffData = await staffResponse.json();
+    
+    setAreas(areasData);
+    setShifts(shiftsData);
+    setStaff(staffData);
+    
+    setLoading(false);
+  } catch (err) {
+    setError(err.message);
+    setLoading(false);
+  }
+};
 
   const getStaffColor = (staffId, role) => {
     const colorPalettes = {
@@ -124,6 +137,31 @@ function ScheduleCalendar() {
 
   const timeSlots = generateTimeSlots();
 
+  const handleAddShift = (date = null) => {
+  setSelectedShift(null);
+  setSelectedDateForForm(date || new Date());
+  setShowShiftForm(true);
+};
+
+const handleEditShift = (shift) => {
+  setSelectedShift(shift);
+  setShowShiftForm(true);
+};
+
+const handleCloseForm = () => {
+  setShowShiftForm(false);
+  setSelectedShift(null);
+  setSelectedDateForForm(null);
+};
+
+const handleShiftSubmit = (data) => {
+  if (data.deleted) {
+    setShifts(shifts.filter(s => s.id !== data.id));
+  } else {
+    fetchScheduleData();
+  }
+};
+
   // Position and height for shift box in calendar
   const calculateShiftPosition = (startTime, endTime) => {
     const parseTime = (time) => {
@@ -144,15 +182,20 @@ function ScheduleCalendar() {
   if (loading) return <div className="loading">Loading schedule...</div>;
   if (error) return <div className="error">Error: {error}</div>;
 
-  if (viewMode === 'week') {
-    return (
-      <div className="schedule-container">
-        <div className="schedule-header">
-          <button onClick={goToPreviousWeek}>← Previous Week</button>
-          <h2>Week of {currentWeek.toLocaleDateString()}</h2>
-          <button onClick={goToNextWeek}>Next Week →</button>
-          <button onClick={goToCurrentWeek}>Today</button>
-        </div>
+  const dayShifts = viewMode === 'day' ? getShiftsForDate(selectedDate) : [];
+
+  return (
+    <>
+      {viewMode === 'week' ? (
+        // WEEKLY VIEW
+        <div className="schedule-container">
+          <div className="schedule-header">
+            <button onClick={goToPreviousWeek}>← Previous Week</button>
+            <h2>Week of {currentWeek.toLocaleDateString()}</h2>
+            <button onClick={goToNextWeek}>Next Week →</button>
+            <button onClick={goToCurrentWeek}>Today</button>
+            <button onClick={() => handleAddShift()} className="add-shift-button">+ Add Shift</button>
+          </div>
 
         <div className="schedule-grid">
           <div className="grid-header">
@@ -187,8 +230,12 @@ function ScheduleCalendar() {
                       areaShifts.map(shift => (
                         <div 
                           key={shift.id} 
-                          className="shift-card"
+                          className=" shift-card clickable-shift"
                           style={{ background: getStaffColor(shift.staff_id, shift.staff_role) }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditShift(shift);
+                          }}
                         >
                           <div className="staff-name">{shift.staff_name}</div>
                           <div className="shift-time">{shift.start_time} - {shift.end_time}</div>
@@ -202,16 +249,13 @@ function ScheduleCalendar() {
           ))}
         </div>
       </div>
-    );
-  }
-
-  const dayShifts = getShiftsForDate(selectedDate);
-  
-  return (
+    ) : (
+    // DAILY VIEW
     <div className="schedule-container">
       <div className="schedule-header">
         <button onClick={switchToWeekView}>← Back to Week View</button>
         <h2>{selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</h2>
+        <button onClick={() => handleAddShift(selectedDate)} className="add-shift-button">+ Add Shift</button>
       </div>
 
       <div className="timeline-view">
@@ -241,12 +285,13 @@ function ScheduleCalendar() {
                     return (
                       <div
                         key={shift.id}
-                        className="timeline-shift-box"
+                        className="timeline-shift-box clickable-shift"
                         style={{
                           top: `${top}px`,
                           height: `${height}px`,
                           background: getStaffColor(shift.staff_id, shift.staff_role)
                         }}
+                        onClick={() => handleEditShift(shift)}
                       >
                         <div className="timeline-staff-name">{shift.staff_name}</div>
                         <div className="timeline-staff-role">{shift.staff_role}</div>
@@ -283,6 +328,18 @@ function ScheduleCalendar() {
         </div>
       </div>
     </div>
+  )}
+
+      <ShiftForm
+        isOpen={showShiftForm}
+        onClose={handleCloseForm}
+        onSubmit={handleShiftSubmit}
+        shift={selectedShift}
+        areas={areas}
+        staff={staff}
+        selectedDate={selectedDateForForm}
+      />
+    </>
   );
 }
 
