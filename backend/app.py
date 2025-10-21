@@ -6,6 +6,8 @@ from db import db
 import os
 from dotenv import load_dotenv
 from datetime import datetime
+from utils import validate_shift, check_area_coverage
+
 
 load_dotenv()
 
@@ -208,6 +210,41 @@ def get_shifts():
         return jsonify([s.to_dict() for s in shifts]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/shifts', methods=['POST'])
+def create_shift():
+    try:
+        data = request.get_json()
+        
+        staff_id = data['staff_id']
+        area_id = data['area_id']
+        date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+        start_time = datetime.strptime(data['start_time'], '%H:%M').time()
+        end_time = datetime.strptime(data['end_time'], '%H:%M').time()
+        
+        is_valid, error_message = validate_shift(staff_id, area_id, date, start_time, end_time)
+        
+        if not is_valid:
+            return jsonify({'error': error_message}), 400
+        
+        new_shift = Shift(
+            staff_id=staff_id,
+            area_id=area_id,
+            date=date,
+            start_time=start_time,
+            end_time=end_time
+        )
+        db.session.add(new_shift)
+        db.session.commit()
+        
+        return jsonify(new_shift.to_dict()), 201
+    except ValueError as ve:
+        return jsonify({'error': str(ve)}), 400
+    except KeyError as ke:
+        return jsonify({'error': f'Missing required field: {str(ke)}'}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/shifts/<int:id>', methods=['GET'])
@@ -219,46 +256,28 @@ def get_shift_by_id(id):
         return jsonify({'error': 'Shift not found'}), 404
 
 
-@app.route('/shifts', methods=['POST'])
-def create_shift():
-    try:
-        data = request.get_json()
-        
-        new_shift = Shift(
-            staff_id=data['staff_id'],
-            area_id=data['area_id'],
-            date=datetime.strptime(data['date'], '%Y-%m-%d').date(),
-            start_time=datetime.strptime(data['start_time'], '%H:%M').time(),
-            end_time=datetime.strptime(data['end_time'], '%H:%M').time()
-        )
-        db.session.add(new_shift)
-        db.session.commit()
-        return jsonify(new_shift.to_dict()), 201
-    except ValueError as ve:
-        return jsonify({'error': str(ve)}), 400
-    except KeyError as ke:
-        return jsonify({'error': f'Missing required field: {str(ke)}'}), 400
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
-
 @app.route('/shifts/<int:id>', methods=['PUT'])
 def update_shift(id):
     try:
         shift = Shift.query.get_or_404(id)
         data = request.get_json()
         
-        if 'staff_id' in data:
-            shift.staff_id = data['staff_id']
-        if 'area_id' in data:
-            shift.area_id = data['area_id']
-        if 'date' in data:
-            shift.date = datetime.strptime(data['date'], '%Y-%m-%d').date()
-        if 'start_time' in data:
-            shift.start_time = datetime.strptime(data['start_time'], '%H:%M').time()
-        if 'end_time' in data:
-            shift.end_time = datetime.strptime(data['end_time'], '%H:%M').time()
+        staff_id = data.get('staff_id', shift.staff_id)
+        area_id = data.get('area_id', shift.area_id)
+        date = datetime.strptime(data['date'], '%Y-%m-%d').date() if 'date' in data else shift.date
+        start_time = datetime.strptime(data['start_time'], '%H:%M').time() if 'start_time' in data else shift.start_time
+        end_time = datetime.strptime(data['end_time'], '%H:%M').time() if 'end_time' in data else shift.end_time
+        
+        is_valid, error_message = validate_shift(staff_id, area_id, date, start_time, end_time, shift_id=id)
+        
+        if not is_valid:
+            return jsonify({'error': error_message}), 400
+        
+        shift.staff_id = staff_id
+        shift.area_id = area_id
+        shift.date = date
+        shift.start_time = start_time
+        shift.end_time = end_time
         
         db.session.commit()
         return jsonify(shift.to_dict()), 200
@@ -362,7 +381,23 @@ def delete_time_off_request(id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/coverage/<int:area_id>/<string:date>', methods=['GET'])
+def get_area_coverage(area_id, date):
+    try:
+        date_obj = datetime.strptime(date, '%Y-%m-%d').date()
+        is_covered, warnings = check_area_coverage(area_id, date_obj)
+        
+        return jsonify({
+            'area_id': area_id,
+            'date': date,
+            'is_covered': is_covered,
+            'warnings': warnings
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':
     app.run(port=5000, debug=True)
+

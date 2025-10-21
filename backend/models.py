@@ -13,9 +13,9 @@ class Staff(db.Model):
     start_time = db.Column(db.Time, nullable=True)
     is_per_diem = db.Column(db.Boolean, default=False)
     area_restrictions = db.Column(db.String(200), nullable=True)
-    required_day_off = db.Column(db.String(50), nullable=True)
+    required_days_off = db.Column(db.String(100), nullable=True)
+    flexible_days_off = db.Column(db.String(100), nullable=True)
     is_active = db.Column(db.Boolean, default=True)
-    
     shifts = db.relationship('Shift', back_populates='staff_member', cascade='all, delete-orphan')
     time_off_requests = db.relationship('TimeOffRequest', back_populates='staff_member', cascade='all, delete-orphan')
     
@@ -54,7 +54,8 @@ class Staff(db.Model):
             'start_time': self.start_time.strftime('%H:%M') if self.start_time else None,
             'is_per_diem': self.is_per_diem,
             'area_restrictions': self.area_restrictions,
-            'required_day_off': self.required_day_off,
+            'required_days_off': self.required_days_off,
+            'flexible_days_off': self.flexible_days_off,
             'is_active': self.is_active
         }
 

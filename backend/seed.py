@@ -35,7 +35,7 @@ def seed_database():
             
             # 8-hour RN
             Staff(name='Deepa', role='RN', shift_length=8, days_per_week=4, is_per_diem=False,
-                 required_day_off='Tuesday_or_Thursday'),
+                 flexible_days_off='["Tuesday", "Thursday"]'),
             
             # Per Diem RNs
             Staff(name='Trisha', role='RN', shift_length=8, days_per_week=4, is_per_diem=True,
@@ -47,7 +47,7 @@ def seed_database():
             
             # GI Techs
             Staff(name='Sam', role='GI_Tech', shift_length=8, days_per_week=4, is_per_diem=False,
-                 required_day_off='Wednesday'),
+                 required_days_off='["Wednesday"]'),
             Staff(name='Curtis', role='GI_Tech', shift_length=10, days_per_week=4, is_per_diem=False),
             Staff(name='Eileen', role='GI_Tech', shift_length=10, days_per_week=4, is_per_diem=False),
             Staff(name='Elizabeth', role='GI_Tech', shift_length=10, days_per_week=4, is_per_diem=False),
