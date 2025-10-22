@@ -221,11 +221,16 @@ def create_shift():
         date = datetime.strptime(data['date'], '%Y-%m-%d').date()
         start_time = datetime.strptime(data['start_time'], '%H:%M').time()
         end_time = datetime.strptime(data['end_time'], '%H:%M').time()
+        override_validation = data.get('override_validation', False)
         
         is_valid, error_message = validate_shift(staff_id, area_id, date, start_time, end_time)
         
-        if not is_valid:
-            return jsonify({'error': error_message}), 400
+        # VALIDATE SHIFT (unless overridden)
+        if not override_validation:
+            is_valid, error_message = validate_shift(staff_id, area_id, date, start_time, end_time)
+            
+            if not is_valid:
+                return jsonify({'error': error_message}), 400
         
         new_shift = Shift(
             staff_id=staff_id,
@@ -267,11 +272,14 @@ def update_shift(id):
         date = datetime.strptime(data['date'], '%Y-%m-%d').date() if 'date' in data else shift.date
         start_time = datetime.strptime(data['start_time'], '%H:%M').time() if 'start_time' in data else shift.start_time
         end_time = datetime.strptime(data['end_time'], '%H:%M').time() if 'end_time' in data else shift.end_time
+        override_validation = data.get('override_validation', False)
         
-        is_valid, error_message = validate_shift(staff_id, area_id, date, start_time, end_time, shift_id=id)
-        
-        if not is_valid:
-            return jsonify({'error': error_message}), 400
+        # VALIDATE SHIFT (unless overridden)
+        if not override_validation:
+            is_valid, error_message = validate_shift(staff_id, area_id, date, start_time, end_time, shift_id=id)
+            
+            if not is_valid:
+                return jsonify({'error': error_message}), 400
         
         shift.staff_id = staff_id
         shift.area_id = area_id

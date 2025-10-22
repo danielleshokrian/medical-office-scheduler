@@ -11,6 +11,7 @@ function ShiftForm({ isOpen, onClose, onSubmit, shift, areas, staff, selectedDat
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [overrideValidation, setOverrideValidation] = useState(false);
 
   useEffect(() => {
     if (shift) {
@@ -107,6 +108,11 @@ const calculateEndTime = (startTime, shiftLength) => {
         : 'http://127.0.0.1:5000/shifts';
       
       const method = shift ? 'PUT' : 'POST';
+
+      const payload = {
+      ...formData,
+      override_validation: overrideValidation
+    };
       
       const response = await fetch(url, {
         method: method,
@@ -118,8 +124,41 @@ const calculateEndTime = (startTime, shiftLength) => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save shift');
+
+      // If validation error, show option to override for exceptions
+      if (response.status === 400 && !overrideValidation) {
+        const shouldOverride = window.confirm(
+          `Validation Error: ${errorData.error}\n\nDo you want to override validation and save anyway? This will bypass all scheduling rules.`
+        );
+        
+        if (shouldOverride) {
+          setOverrideValidation(true);
+          // Resubmit immediately with override flag
+          const retryResponse = await fetch(url, {
+            method: method,
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              ...formData,
+              override_validation: true
+            })
+          });
+          
+          if (retryResponse.ok) {
+            const data = await retryResponse.json();
+            onSubmit(data);
+            onClose();
+            return;
+          }
+        }
+        
+        setLoading(false);
+        return;
       }
+      
+      throw new Error(errorData.error || 'Failed to save shift');
+    }
 
       const data = await response.json();
       onSubmit(data);
