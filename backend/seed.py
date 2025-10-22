@@ -28,14 +28,14 @@ def seed_database():
         print("Seeding staff members...")
         staff_members = [
             # 10-hour RNs
-            Staff(name='Leah', role='RN', shift_length=10, days_per_week=4, is_per_diem=False),
-            Staff(name='Alannah', role='RN', shift_length=10, days_per_week=4, is_per_diem=False),
-            Staff(name='Mary', role='RN', shift_length=10, days_per_week=4, is_per_diem=False),
-            Staff(name='Cameron', role='RN', shift_length=10, days_per_week=4, is_per_diem=False),
-            
+            Staff(name='Leah', role='RN', shift_length=10, days_per_week=4, is_per_diem=False, area_restrictions='["Any"]'),
+            Staff(name='Alannah', role='RN', shift_length=10, days_per_week=4, is_per_diem=False, area_restrictions='["Any"]'),
+            Staff(name='Mary', role='RN', shift_length=10, days_per_week=4, is_per_diem=False, area_restrictions='["Any"]'),
+            Staff(name='Cameron', role='RN', shift_length=10, days_per_week=4, is_per_diem=False, area_restrictions='["Any"]'),
+
             # 8-hour RN
             Staff(name='Deepa', role='RN', shift_length=8, days_per_week=4, is_per_diem=False,
-                 flexible_days_off='["Tuesday", "Thursday"]'),
+                 flexible_days_off='["Tuesday", "Thursday"]', area_restrictions='["Any"]'),
             
             # Per Diem RNs
             Staff(name='Trisha', role='RN', shift_length=8, days_per_week=4, is_per_diem=True,
@@ -47,19 +47,23 @@ def seed_database():
             
             # GI Techs
             Staff(name='Sam', role='GI_Tech', shift_length=8, days_per_week=4, is_per_diem=False,
-                 required_days_off='["Wednesday"]'),
-            Staff(name='Curtis', role='GI_Tech', shift_length=10, days_per_week=4, is_per_diem=False),
-            Staff(name='Eileen', role='GI_Tech', shift_length=10, days_per_week=4, is_per_diem=False),
-            Staff(name='Elizabeth', role='GI_Tech', shift_length=10, days_per_week=4, is_per_diem=False),
-            Staff(name='Stefan', role='GI_Tech', shift_length=10, days_per_week=4, is_per_diem=False),
+                 required_days_off='["Wednesday"]', area_restrictions='["Any"]'),
+            Staff(name='Curtis', role='GI_Tech', shift_length=10, days_per_week=4, is_per_diem=False,
+                   area_restrictions='["Any"]'),
+            Staff(name='Eileen', role='GI_Tech', shift_length=10, days_per_week=4, is_per_diem=False,
+                   area_restrictions='["Any"]'),
+            Staff(name='Elizabeth', role='GI_Tech', shift_length=10, days_per_week=4, is_per_diem=False,
+                   area_restrictions='["Any"]'),
+            Staff(name='Stefan', role='GI_Tech', shift_length=10, days_per_week=4, is_per_diem=False,
+                   area_restrictions='["Any"]'),
             Staff(name='Jess', role='GI_Tech', shift_length=10, days_per_week=4, is_per_diem=False,
-                 start_time=time(6, 15)),
+                   area_restrictions='["Any"]'),
             
             # Scope Techs
             Staff(name='Olga', role='Scope_Tech', shift_length=8, days_per_week=5, is_per_diem=False,
-                 start_time=time(7, 30)),
+                 start_time=time(7, 30), area_restrictions='["Scope Room"]'),
             Staff(name='Jesus', role='Scope_Tech', shift_length=8, days_per_week=5, is_per_diem=False,
-                 start_time=time(9, 0)),
+                 start_time=time(9, 0), area_restrictions='["Scope Room"]'),
         ]
         db.session.add_all(staff_members)
         db.session.commit()

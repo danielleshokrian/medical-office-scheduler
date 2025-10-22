@@ -63,6 +63,9 @@ def create_staff():
         start_time = None
         if data.get('start_time'):
             start_time = datetime.strptime(data['start_time'], '%H:%M').time()
+
+        required_days_off = data.get('required_days_off')
+        flexible_days_off = data.get('flexible_days_off')
         
         new_staff = Staff(
             name=data['name'],
@@ -72,7 +75,8 @@ def create_staff():
             start_time=start_time,
             is_per_diem=data.get('is_per_diem', False),
             area_restrictions=data.get('area_restrictions'),
-            required_day_off=data.get('required_day_off'),
+            required_days_off=data.get('required_days_off'),
+            flexible_days_off=data.get('flexible_days_off'),
             is_active=data.get('is_active', True)
         )
         db.session.add(new_staff)
