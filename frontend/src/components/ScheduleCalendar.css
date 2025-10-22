@@ -306,3 +306,60 @@
   transform: scale(1.02);
   box-shadow: 0 4px 8px rgba(0,0,0,0.3);
 }
+
+/* Coverage status colors */
+.schedule-cell.covered {
+  border-left: 4px solid #2ecc71;
+}
+
+.schedule-cell.understaffed {
+  border-left: 4px solid #f39c12;
+  background: #fef5e7 !important;
+}
+
+.schedule-cell.empty {
+  border-left: 4px solid #e74c3c;
+  background: #fadbd8 !important;
+}
+
+.coverage-warning {
+  background: #f39c12;
+  color: white;
+  padding: 4px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  margin-top: 5px;
+  text-align: center;
+}
+
+/* Coverage legend */
+.coverage-legend {
+  margin-top: 20px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.coverage-legend h3 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  color: #2c3e50;
+}
+
+.coverage-legend-items {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.coverage-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.coverage-indicator {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+}

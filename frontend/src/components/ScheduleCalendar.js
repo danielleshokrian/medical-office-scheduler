@@ -14,6 +14,8 @@ function ScheduleCalendar() {
   const [selectedShift, setSelectedShift] = useState(null);
   const [selectedDateForForm, setSelectedDateForForm] = useState(null);
   const [staff, setStaff] = useState([]);
+  const [coverage, setCoverage] = useState({});
+
 
 
   function getMonday(date) {
@@ -36,6 +38,37 @@ function ScheduleCalendar() {
   useEffect(() => {
     fetchScheduleData();
   }, [currentWeek]);
+
+  useEffect(() => {
+  if (areas.length > 0) {
+    fetchCoverageData();
+  }
+}, [viewMode, selectedDate, areas]);
+
+const fetchCoverageData = async () => {
+  try {
+    const coverageData = {};
+    
+    const datesToCheck = viewMode === 'week' ? weekDates : [selectedDate];
+    
+    for (const date of datesToCheck) {
+      const dateStr = date.toISOString().split('T')[0];
+      coverageData[dateStr] = {};
+      
+      for (const area of areas) {
+        const response = await fetch(`http://127.0.0.1:5000/coverage/${area.id}/${dateStr}`);
+        if (response.ok) {
+          const data = await response.json();
+          coverageData[dateStr][area.id] = data;
+        }
+      }
+    }
+    
+    setCoverage(coverageData);
+  } catch (err) {
+    console.error('Failed to fetch coverage data:', err);
+  }
+};
       
 const fetchScheduleData = async () => {
   try {
@@ -60,9 +93,26 @@ const fetchScheduleData = async () => {
     setStaff(staffData);
     
     setLoading(false);
+
+    setTimeout(() => fetchCoverageData(), 100);
   } catch (err) {
     setError(err.message);
     setLoading(false);
+  }
+};
+
+const getCoverageStatus = (areaId, date) => {
+  const dateStr = date.toISOString().split('T')[0];
+  const coverageInfo = coverage[dateStr]?.[areaId];
+  
+  if (!coverageInfo) return { status: 'unknown', warnings: [] };
+  
+  if (coverageInfo.is_covered) {
+    return { status: 'covered', warnings: [] };
+  } else if (coverageInfo.warnings && coverageInfo.warnings.length > 0) {
+    return { status: 'understaffed', warnings: coverageInfo.warnings };
+  } else {
+    return { status: 'empty', warnings: ['Not staffed'] };
   }
 };
 
@@ -218,19 +268,22 @@ const handleShiftSubmit = (data) => {
               <div className="area-name">{area.name}</div>
               {weekDates.map(date => {
                 const areaShifts = getShiftsForAreaAndDate(area.id, date);
+                const coverageStatus = getCoverageStatus(area.id, date);
                 return (
                   <div 
                     key={`${area.id}-${date.toISOString()}`} 
-                    className="schedule-cell"
+                    className={`schedule-cell ${coverageStatus.status}`}
                     onClick={() => switchToDayView(date)}
+                    title={coverageStatus.warnings.join(', ')}
                   >
                     {areaShifts.length === 0 ? (
                       <div className="empty-cell">Not Staffed</div>
                     ) : (
-                      areaShifts.map(shift => (
+                      <>
+                      {areaShifts.map(shift => (
                         <div 
                           key={shift.id} 
-                          className=" shift-card clickable-shift"
+                          className="shift-card clickable-shift"
                           style={{ background: getStaffColor(shift.staff_id, shift.staff_role) }}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -240,16 +293,22 @@ const handleShiftSubmit = (data) => {
                           <div className="staff-name">{shift.staff_name}</div>
                           <div className="shift-time">{shift.start_time} - {shift.end_time}</div>
                         </div>
-                      ))
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
+                      ))}
+                      {coverageStatus.status === 'understaffed' && (
+                        <div className="coverage-warning">
+                          ⚠️ {coverageStatus.warnings[0]}
+                          </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
       </div>
-    ) : (
+    </div>
+  ) : (
     // DAILY VIEW
     <div className="schedule-container">
       <div className="schedule-header">
@@ -329,6 +388,7 @@ const handleShiftSubmit = (data) => {
       </div>
     </div>
   )}
+  
 
       <ShiftForm
         isOpen={showShiftForm}
