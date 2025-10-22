@@ -38,8 +38,42 @@ function ShiftForm({ isOpen, onClose, onSubmit, shift, areas, staff, selectedDat
       ...prev,
       [name]: value
     }));
-    setError('');
-  };
+  
+  // Auto-calculate end time based on staff and start time
+  if (name === 'staff_id' || name === 'start_time') {
+    const staffId = name === 'staff_id' ? value : formData.staff_id;
+    const startTime = name === 'start_time' ? value : formData.start_time;
+    
+    if (staffId && startTime) {
+      const selectedStaff = staff.find(s => s.id === parseInt(staffId));
+      if (selectedStaff && selectedStaff.shift_length) {
+        const calculatedEndTime = calculateEndTime(startTime, selectedStaff.shift_length);
+        setFormData(prev => ({
+          ...prev,
+          [name]: value,
+          end_time: calculatedEndTime
+        }));
+      }
+    }
+  }
+  
+  setError('');
+};
+
+const calculateEndTime = (startTime, shiftLength) => {
+  if (!startTime) return '';
+  
+  const [hours, minutes] = startTime.split(':').map(Number);
+  const startDate = new Date();
+  startDate.setHours(hours, minutes, 0, 0);
+  
+  startDate.setHours(startDate.getHours() + shiftLength);
+  
+  const endHours = startDate.getHours().toString().padStart(2, '0');
+  const endMinutes = startDate.getMinutes().toString().padStart(2, '0');
+  
+  return `${endHours}:${endMinutes}`;
+};
 
   const validateForm = () => {
     if (!formData.staff_id) return 'Please select a staff member';
