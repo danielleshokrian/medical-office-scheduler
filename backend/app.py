@@ -4,10 +4,11 @@ from flask_cors import CORS, cross_origin
 from models import Staff, StaffArea, Shift, TimeOffRequest, AISuggestion
 from db import db
 import os
+import json
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timedelta
 from utils import validate_shift, check_area_coverage
-
+from ai_scheduler import generate_weekly_schedule
 
 load_dotenv()
 
@@ -407,6 +408,96 @@ def get_area_coverage(area_id, date):
             'warnings': warnings
         }), 200
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+
+@app.route('/ai/generate-schedule', methods=['POST', 'OPTIONS'])
+def ai_generate_schedule():
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        data = request.get_json()
+        week_start = datetime.strptime(data['week_start_date'], '%Y-%m-%d').date()
+        fill_empty_only = data.get('fill_empty_only', False)
+        
+        existing_shifts = None
+        if fill_empty_only:
+            week_end = week_start + timedelta(days=4)
+            existing_shifts = Shift.query.filter(
+                Shift.date >= week_start,
+                Shift.date <= week_end
+            ).all()
+        
+        result = generate_weekly_schedule(week_start, fill_empty_only, existing_shifts)
+        
+        if not result['success']:
+            return jsonify({'error': result['message']}), 500
+        
+        suggestion = AISuggestion(
+            week_start_date=week_start,
+            suggested_schedule=json.dumps(result['shifts']),
+            reasoning='AI-generated schedule',
+            constraints_met='All constraints evaluated',
+            accepted=False
+        )
+        db.session.add(suggestion)
+        db.session.commit()
+        
+        return jsonify({
+            'suggestion_id': suggestion.id,
+            'shifts': result['shifts'],
+            'message': result['message']
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/ai/apply-schedule', methods=['POST', 'OPTIONS'])
+def apply_ai_schedule():
+    """Apply AI suggestions by creating actual shifts"""
+    if request.method == 'OPTIONS':
+        return '', 200
+        
+    try:
+        data = request.get_json()
+        shifts_data = data['shifts']
+        clear_existing = data.get('clear_existing', False)
+        week_start = datetime.strptime(data['week_start_date'], '%Y-%m-%d').date()
+        
+        # Optionally clear existing shifts for the week
+        if clear_existing:
+            week_end = week_start + timedelta(days=4)
+            Shift.query.filter(
+                Shift.date >= week_start,
+                Shift.date <= week_end
+            ).delete()
+        
+        # Create shifts
+        created_shifts = []
+        for shift_data in shifts_data:
+            new_shift = Shift(
+                staff_id=shift_data['staff_id'],
+                area_id=shift_data['area_id'],
+                date=datetime.strptime(shift_data['date'], '%Y-%m-%d').date(),
+                start_time=datetime.strptime(shift_data['start_time'], '%H:%M').time(),
+                end_time=datetime.strptime(shift_data['end_time'], '%H:%M').time()
+            )
+            db.session.add(new_shift)
+            created_shifts.append(new_shift)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'Successfully created {len(created_shifts)} shifts',
+            'shifts': [s.to_dict() for s in created_shifts]
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error applying schedule: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 

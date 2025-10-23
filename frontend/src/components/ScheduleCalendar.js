@@ -15,6 +15,13 @@ function ScheduleCalendar() {
   const [selectedDateForForm, setSelectedDateForForm] = useState(null);
   const [staff, setStaff] = useState([]);
   const [coverage, setCoverage] = useState({});
+  const [history, setHistory] = useState([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+
+  const [previewMode, setPreviewMode] = useState(false);
+  const [previewShifts, setPreviewShifts] = useState([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
 
 
 
@@ -139,14 +146,32 @@ const getCoverageStatus = (areaId, date) => {
 
   const getShiftsForAreaAndDate = (areaId, date) => {
     const dateStr = date.toISOString().split('T')[0];
-    return shifts.filter(shift => 
-      shift.area_id === areaId && shift.date === dateStr
+    // Get actual shifts
+    const actualShifts = shifts.filter(shift => 
+      shift.area_id === areaId && 
+      shift.date === dateStr
     );
+    
+    // Get preview shifts if in preview mode
+    const previewShiftsForCell = previewMode ? previewShifts.filter(shift =>
+      shift.area_id === areaId &&
+      shift.date === dateStr
+    ) : [];
+    
+    return [...actualShifts, ...previewShiftsForCell];
   };
 
   const getShiftsForDate = (date) => {
     const dateStr = date.toISOString().split('T')[0];
-    return shifts.filter(shift => shift.date === dateStr);
+    // Get actual shifts
+    const actualShifts = shifts.filter(shift => shift.date === dateStr);
+    
+    // Get preview shifts if in preview mode
+    const previewShiftsForDate = previewMode ? previewShifts.filter(shift =>
+      shift.date === dateStr
+    ) : [];
+    
+    return [...actualShifts, ...previewShiftsForDate];
   };
 
   const goToPreviousWeek = () => {
@@ -234,6 +259,244 @@ const handleShiftSubmit = (data) => {
 
   const dayShifts = viewMode === 'day' ? getShiftsForDate(selectedDate) : [];
 
+  // AI Scheduling Handlers
+  const handleGenerateFullSchedule = async () => {
+  if (!window.confirm('⚠️ This will replace ALL existing shifts for this week. Continue?')) {
+    return;
+  }
+  
+  setAiLoading(true);
+  setAiError('');
+  
+  try {
+    const monday = getMonday(currentWeek);
+    const response = await fetch('http://127.0.0.1:5000/ai/generate-schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        week_start_date: monday.toISOString().split('T')[0],
+        fill_empty_only: false
+      })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to generate schedule');
+    }
+    
+    const data = await response.json();
+    
+    // Convert AI shifts to preview format with staff/area info
+    const shiftsWithInfo = data.shifts.map(shift => ({
+      ...shift,
+      id: `preview-${Math.random()}`,
+      staff_name: staff.find(s => s.id === shift.staff_id)?.name || 'Unknown',
+      staff_role: staff.find(s => s.id === shift.staff_id)?.role || 'Unknown',
+      area_name: areas.find(a => a.id === shift.area_id)?.name || 'Unknown',
+      is_preview: true
+    }));
+    
+    setPreviewShifts(shiftsWithInfo);
+    setPreviewMode(true);
+    setAiLoading(false);
+  } catch (err) {
+    setAiError(err.message);
+    setAiLoading(false);
+  }
+};
+
+const handleFillEmptyShifts = async () => {
+  setAiLoading(true);
+  setAiError('');
+  
+  try {
+    const monday = getMonday(currentWeek);
+    const response = await fetch('http://127.0.0.1:5000/ai/generate-schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        week_start_date: monday.toISOString().split('T')[0],
+        fill_empty_only: true
+      })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to generate suggestions');
+    }
+    
+    const data = await response.json();
+    
+    // Convert AI shifts to preview format with staff/area info
+    const shiftsWithInfo = data.shifts.map(shift => ({
+      ...shift,
+      id: `preview-${Math.random()}`,
+      staff_name: staff.find(s => s.id === shift.staff_id)?.name || 'Unknown',
+      staff_role: staff.find(s => s.id === shift.staff_id)?.role || 'Unknown',
+      area_name: areas.find(a => a.id === shift.area_id)?.name || 'Unknown',
+      is_preview: true
+    }));
+    
+    setPreviewShifts(shiftsWithInfo);
+    setPreviewMode(true);
+    setAiLoading(false);
+  } catch (err) {
+    setAiError(err.message);
+    setAiLoading(false);
+  }
+};
+
+const handleApplySchedule = async () => {
+  setAiLoading(true);
+  
+  try {
+    const monday = getMonday(currentWeek);
+    
+    // Determine if we're replacing (full schedule) or adding (fill empty)
+    const clearExisting = window.confirm(
+      'Do you want to REPLACE all existing shifts?\n\n' +
+      'Click OK to replace everything\n' +
+      'Click Cancel to keep existing shifts and add new ones'
+    );
+    
+    const response = await fetch('http://127.0.0.1:5000/ai/apply-schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        shifts: previewShifts.map(({ id, is_preview, staff_name, staff_role, area_name, ...shift }) => shift),
+        clear_existing: clearExisting,
+        week_start_date: monday.toISOString().split('T')[0]
+      })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to apply schedule');
+    }
+    
+    // Clear preview mode and refresh data
+    setPreviewMode(false);
+    setPreviewShifts([]);
+    fetchScheduleData();
+    setAiLoading(false);
+  } catch (err) {
+    setAiError(err.message);
+    setAiLoading(false);
+  }
+};
+
+const handleCancelPreview = () => {
+  setPreviewMode(false);
+  setPreviewShifts([]);
+  setAiError('');
+};
+
+const saveToHistory = (shifts) => {
+  // When saving new state, remove any "future" states after current index
+  const newHistory = history.slice(0, historyIndex + 1);
+  newHistory.push(JSON.parse(JSON.stringify(shifts))); // Deep copy
+  
+  // Keep only last 20 states to avoid memory issues
+  if (newHistory.length > 20) {
+    newHistory.shift();
+  } else {
+    setHistoryIndex(historyIndex + 1);
+  }
+  
+  setHistory(newHistory);
+};
+
+const handleUndo = () => {
+  if (historyIndex > 0) {
+    const previousState = history[historyIndex - 1];
+    setHistoryIndex(historyIndex - 1);
+    restoreShiftsFromHistory(previousState);
+  }
+};
+
+const handleRedo = () => {
+  if (historyIndex < history.length - 1) {
+    const nextState = history[historyIndex + 1];
+    setHistoryIndex(historyIndex + 1);
+    restoreShiftsFromHistory(nextState);
+  }
+};
+
+const restoreShiftsFromHistory = async (historicalShifts) => {
+  try {
+    // Get current week range
+    const monday = getMonday(currentWeek);
+    const weekEnd = new Date(monday);
+    weekEnd.setDate(weekEnd.getDate() + 4);
+    
+    // Delete all shifts for this week
+    const currentWeekShifts = shifts.filter(shift => {
+      const shiftDate = new Date(shift.date);
+      return shiftDate >= monday && shiftDate <= weekEnd;
+    });
+    
+    for (const shift of currentWeekShifts) {
+      await fetch(`http://127.0.0.1:5000/shifts/${shift.id}`, {
+        method: 'DELETE'
+      });
+    }
+    
+    // Recreate shifts from history
+    for (const shift of historicalShifts) {
+      const shiftDate = new Date(shift.date);
+      if (shiftDate >= monday && shiftDate <= weekEnd) {
+        await fetch('http://127.0.0.1:5000/shifts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            staff_id: shift.staff_id,
+            area_id: shift.area_id,
+            date: shift.date,
+            start_time: shift.start_time,
+            end_time: shift.end_time
+          })
+        });
+      }
+    }
+    
+    fetchScheduleData();
+  } catch (err) {
+    alert(`Error restoring: ${err.message}`);
+  }
+};
+
+const handleClearSchedule = async () => {
+  if (!window.confirm('⚠️ This will DELETE ALL shifts for this week. This cannot be undone. Continue?')) {
+    return;
+  }
+  
+  try {
+    // Save current state to history before clearing
+    saveToHistory(shifts);
+    
+    const monday = getMonday(currentWeek);
+    const weekEnd = new Date(monday);
+    weekEnd.setDate(weekEnd.getDate() + 4);
+    
+    // Get all shifts for current week
+    const weekShifts = shifts.filter(shift => {
+      const shiftDate = new Date(shift.date);
+      return shiftDate >= monday && shiftDate <= weekEnd;
+    });
+    
+    // Delete each shift
+    for (const shift of weekShifts) {
+      await fetch(`http://127.0.0.1:5000/shifts/${shift.id}`, {
+        method: 'DELETE'
+      });
+    }
+    
+    fetchScheduleData();
+  } catch (err) {
+    alert(`Error clearing schedule: ${err.message}`);
+  }
+};
+
   return (
     <>
       {viewMode === 'week' ? (
@@ -245,8 +508,55 @@ const handleShiftSubmit = (data) => {
             <button onClick={goToNextWeek}>Next Week →</button>
             <button onClick={goToCurrentWeek}>Today</button>
             <button onClick={() => handleAddShift()} className="add-shift-button">+ Add Shift</button>
+            {/* AI Buttons */}
+            <div className="ai-buttons">
+              <button 
+                onClick={handleFillEmptyShifts} 
+                className="ai-fill-button"
+                disabled={aiLoading || previewMode}
+              >
+                Fill Empty Shifts
+              </button>
+              <button 
+                onClick={handleGenerateFullSchedule} 
+                className="ai-generate-button"
+                disabled={aiLoading || previewMode}
+              >
+                🔄 Generate Full Schedule
+              </button>
+            </div>
           </div>
+                {previewMode && (
+        <div className="preview-banner">
+          <div className="preview-info">
+            <strong>Preview Mode:</strong> {previewShifts.length} shifts suggested
+            {aiError && <span className="preview-error">Error: {aiError}</span>}
+          </div>
+          <div className="preview-actions">
+            <button 
+              onClick={handleApplySchedule} 
+              className="apply-button"
+              disabled={aiLoading}
+            >
+              {aiLoading ? 'Applying...' : '✓ Apply Schedule'}
+            </button>
+            <button 
+              onClick={handleCancelPreview} 
+              className="cancel-preview-button"
+              disabled={aiLoading}
+            >
+              ✗ Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
+      {aiLoading && (
+        <div className="ai-loading">
+          <div className="spinner"></div>
+          <p>AI is generating schedule... This may take 10-20 seconds</p>
+        </div>
+      )}
         <div className="schedule-grid">
           <div className="grid-header">
             <div className="area-label">Area</div>
@@ -283,13 +593,16 @@ const handleShiftSubmit = (data) => {
                       {areaShifts.map(shift => (
                         <div 
                           key={shift.id} 
-                          className="shift-card clickable-shift"
+                          className={`shift-card clickable-shift ${shift.is_preview ? 'preview-shift' : ''}`}
                           style={{ background: getStaffColor(shift.staff_id, shift.staff_role) }}
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleEditShift(shift);
+                            if (!shift.is_preview) {
+                              handleEditShift(shift);
+                            }
                           }}
                         >
+                          {shift.is_preview && <span className="preview-badge">Preview</span>}
                           <div className="staff-name">{shift.staff_name}</div>
                           <div className="shift-time">{shift.start_time} - {shift.end_time}</div>
                         </div>
