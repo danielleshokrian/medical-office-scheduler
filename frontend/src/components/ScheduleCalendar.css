@@ -533,3 +533,66 @@
   color: #7f8c8d;
   margin: 0;
 }
+
+.schedule-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.schedule-nav {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.schedule-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.history-button {
+  padding: 10px 16px;
+  background: #95a5a6;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.history-button:hover:not(:disabled) {
+  background: #7f8c8d;
+}
+
+.history-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.clear-schedule-button {
+  padding: 10px 20px;
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.clear-schedule-button:hover:not(:disabled) {
+  background: #c0392b;
+}
+
+.clear-schedule-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

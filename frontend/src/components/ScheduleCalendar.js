@@ -213,17 +213,20 @@ const getCoverageStatus = (areaId, date) => {
   const timeSlots = generateTimeSlots();
 
   const handleAddShift = (date = null) => {
+  saveToHistory(shifts);
   setSelectedShift(null);
   setSelectedDateForForm(date || new Date());
   setShowShiftForm(true);
 };
 
 const handleEditShift = (shift) => {
+  saveToHistory(shifts);
   setSelectedShift(shift);
   setShowShiftForm(true);
 };
 
 const handleCloseForm = () => {
+  saveToHistory(shifts);
   setShowShiftForm(false);
   setSelectedShift(null);
   setSelectedDateForForm(null);
@@ -350,6 +353,7 @@ const handleApplySchedule = async () => {
   setAiLoading(true);
   
   try {
+    saveToHistory(shifts);
     const monday = getMonday(currentWeek);
     
     // Determine if we're replacing (full schedule) or adding (fill empty)
@@ -392,11 +396,9 @@ const handleCancelPreview = () => {
 };
 
 const saveToHistory = (shifts) => {
-  // When saving new state, remove any "future" states after current index
   const newHistory = history.slice(0, historyIndex + 1);
-  newHistory.push(JSON.parse(JSON.stringify(shifts))); // Deep copy
+  newHistory.push(JSON.parse(JSON.stringify(shifts))); 
   
-  // Keep only last 20 states to avoid memory issues
   if (newHistory.length > 20) {
     newHistory.shift();
   } else {
@@ -424,12 +426,10 @@ const handleRedo = () => {
 
 const restoreShiftsFromHistory = async (historicalShifts) => {
   try {
-    // Get current week range
     const monday = getMonday(currentWeek);
     const weekEnd = new Date(monday);
     weekEnd.setDate(weekEnd.getDate() + 4);
     
-    // Delete all shifts for this week
     const currentWeekShifts = shifts.filter(shift => {
       const shiftDate = new Date(shift.date);
       return shiftDate >= monday && shiftDate <= weekEnd;
@@ -471,20 +471,16 @@ const handleClearSchedule = async () => {
   }
   
   try {
-    // Save current state to history before clearing
     saveToHistory(shifts);
     
     const monday = getMonday(currentWeek);
-    const weekEnd = new Date(monday);
-    weekEnd.setDate(weekEnd.getDate() + 4);
+    const mondayStr = monday.toISOString().split('T')[0];
+    const fridayStr = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 4).toISOString().split('T')[0];
     
-    // Get all shifts for current week
     const weekShifts = shifts.filter(shift => {
-      const shiftDate = new Date(shift.date);
-      return shiftDate >= monday && shiftDate <= weekEnd;
+      return shift.date >= mondayStr && shift.date <= fridayStr;
     });
     
-    // Delete each shift
     for (const shift of weekShifts) {
       await fetch(`http://127.0.0.1:5000/shifts/${shift.id}`, {
         method: 'DELETE'
@@ -507,7 +503,31 @@ const handleClearSchedule = async () => {
             <h2>Week of {currentWeek.toLocaleDateString()}</h2>
             <button onClick={goToNextWeek}>Next Week →</button>
             <button onClick={goToCurrentWeek}>Today</button>
-            <button onClick={() => handleAddShift()} className="add-shift-button">+ Add Shift</button>
+        </div>
+
+        <div className="schedule-actions">
+          {/* History buttons */}
+          <button 
+            onClick={handleUndo}
+            className="history-button"
+            disabled={historyIndex <= 0}
+            title="Undo last change"
+          >
+            ↶ Undo
+          </button>
+          <button 
+            onClick={handleRedo}
+            className="history-button"
+            disabled={historyIndex >= history.length - 1}
+            title="Redo last undone change"
+          >
+            ↷ Redo
+          </button>
+          
+          <button onClick={() => handleAddShift()} className="add-shift-button">
+            + Add Shift
+          </button>
+                  
             {/* AI Buttons */}
             <div className="ai-buttons">
               <button 
@@ -523,6 +543,15 @@ const handleClearSchedule = async () => {
                 disabled={aiLoading || previewMode}
               >
                 🔄 Generate Full Schedule
+              </button>
+
+              {/* Clear button */}
+              <button 
+                onClick={handleClearSchedule}
+                className="clear-schedule-button"
+                disabled={aiLoading || previewMode}
+              >
+                Clear Schedule
               </button>
             </div>
           </div>
