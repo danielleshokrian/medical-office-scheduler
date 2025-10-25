@@ -221,37 +221,66 @@ def create_shift():
     try:
         data = request.get_json()
         
+        if not all(k in data for k in ['staff_id', 'area_id', 'date', 'start_time', 'end_time']):
+            return jsonify({'error': 'Missing required fields'}), 400
+        
         staff_id = data['staff_id']
         area_id = data['area_id']
-        date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+        shift_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
         start_time = datetime.strptime(data['start_time'], '%H:%M').time()
         end_time = datetime.strptime(data['end_time'], '%H:%M').time()
-        override_validation = data.get('override_validation', False)
         
-        is_valid, error_message = validate_shift(staff_id, area_id, date, start_time, end_time)
+        staff = Staff.query.get(staff_id)
+        if not staff:
+            return jsonify({'error': 'Staff member not found'}), 404
         
-        # VALIDATE SHIFT (unless overridden)
-        if not override_validation:
-            is_valid, error_message = validate_shift(staff_id, area_id, date, start_time, end_time)
-            
-            if not is_valid:
-                return jsonify({'error': error_message}), 400
+        area = StaffArea.query.get(area_id)
+        if not area:
+            return jsonify({'error': 'Area not found'}), 404
+        
+        day_of_week = shift_date.strftime('%A')  # Monday, Tuesday, etc.
+        required_days_off = json.loads(staff.required_days_off) if staff.required_days_off else []
+        
+        if day_of_week in required_days_off:
+            return jsonify({
+                'error': f'Cannot schedule {staff.name} on {day_of_week} - this is a required day off'
+            }), 400
+        
+        time_off_conflict = TimeOffRequest.query.filter(
+            TimeOffRequest.staff_id == staff_id,
+            TimeOffRequest.status == 'approved',
+            TimeOffRequest.start_date <= shift_date,
+            TimeOffRequest.end_date >= shift_date
+        ).first()
+        
+        if time_off_conflict:
+            return jsonify({
+                'error': f'Cannot create shift: {staff.name} has approved time-off from {time_off_conflict.start_date} to {time_off_conflict.end_date}'
+            }), 400
+        
+        existing_shift = Shift.query.filter(
+            Shift.staff_id == staff_id,
+            Shift.date == shift_date
+        ).first()
+        
+        if existing_shift:
+            return jsonify({'error': f'{staff.name} is already scheduled on {shift_date}'}), 400
         
         new_shift = Shift(
             staff_id=staff_id,
             area_id=area_id,
-            date=date,
+            date=shift_date,
             start_time=start_time,
             end_time=end_time
         )
+        
         db.session.add(new_shift)
         db.session.commit()
         
         return jsonify(new_shift.to_dict()), 201
-    except ValueError as ve:
-        return jsonify({'error': str(ve)}), 400
-    except KeyError as ke:
-        return jsonify({'error': f'Missing required field: {str(ke)}'}), 400
+        
+    except ValueError as e:
+        return jsonify({'error': f'Invalid date/time format: {str(e)}'}), 400
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
@@ -416,6 +445,8 @@ def update_time_off_request(id):
             if data['status'] not in valid_statuses:
                 return jsonify({'error': f'Status must be one of: {", ".join(valid_statuses)}'}), 400
         
+            request_obj.status = data['status']
+
         if 'reason' in data:
             request_obj.reason = data['reason']
         
