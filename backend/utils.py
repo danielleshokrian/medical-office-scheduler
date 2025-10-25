@@ -152,14 +152,31 @@ def check_area_coverage(area_id, date):
     
     warnings = []
 
-    if area.required_rn_count > 0 and rn_count < area.required_rn_count:
-        warnings.append(f"Needs {area.required_rn_count - rn_count} more RN(s)")
+        # Special handling for Scope Room
+    if 'Scope Room' in area.name:
+        # Scope Room needs 2 people: ideally 2 Scope Techs, but allows 1 Scope Tech + 1 GI Tech
+        total_scope_staff = scope_tech_count + tech_count
+        if total_scope_staff < 2:
+            warnings.append(f"Needs {2 - total_scope_staff} more staff (Scope Tech or GI Tech)")
+        elif scope_tech_count == 0:
+            warnings.append("Warning: No Scope Techs scheduled (should have at least 1)")
     
-    if area.required_tech_count > 0 and tech_count < area.required_tech_count:
-        warnings.append(f"Needs {area.required_tech_count - tech_count} more Tech(s)")
+    # Special handling for Procedure Rooms (flexible staffing)
+    elif 'Procedure Room' in area.name:
+        # Procedure rooms need 2 people total: can be 2 techs, 2 RNs, or 1 of each
+        total_staff = rn_count + tech_count
+        if total_staff < 2:
+            warnings.append(f"Needs {2 - total_staff} more staff (RN or Tech)")
     
-    if area.required_scope_tech_count > 0 and scope_tech_count < area.required_scope_tech_count:
-        warnings.append(f"Needs {area.required_scope_tech_count - scope_tech_count} more Scope Tech(s)")
+    else:
+        if area.required_rn_count > 0 and rn_count < area.required_rn_count:
+            warnings.append(f"Needs {area.required_rn_count - rn_count} more RN(s)")
+        
+        if area.required_tech_count > 0 and tech_count < area.required_tech_count:
+            warnings.append(f"Needs {area.required_tech_count - tech_count} more Tech(s)")
+        
+        if area.required_scope_tech_count > 0 and scope_tech_count < area.required_scope_tech_count:
+            warnings.append(f"Needs {area.required_scope_tech_count - scope_tech_count} more Scope Tech(s)")
     
     is_covered = len(warnings) == 0
     
