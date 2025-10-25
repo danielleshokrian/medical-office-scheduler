@@ -6,7 +6,7 @@ from db import db
 import os
 import json
 from dotenv import load_dotenv
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from utils import validate_shift, check_area_coverage
 from ai_scheduler import generate_weekly_schedule
 
@@ -346,18 +346,60 @@ def create_time_off_request():
     try:
         data = request.get_json()
         
+        if 'staff_id' not in data:
+            return jsonify({'error': 'staff_id is required'}), 400
+        if 'start_date' not in data:
+            return jsonify({'error': 'start_date is required'}), 400
+        if 'end_date' not in data:
+            return jsonify({'error': 'end_date is required'}), 400
+        
+        staff = Staff.query.get(data['staff_id'])
+        if not staff:
+            return jsonify({'error': 'Staff member not found'}), 404
+        
+        try:
+            start_date = datetime.strptime(data['start_date'], '%Y-%m-%d').date()
+            end_date = datetime.strptime(data['end_date'], '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+        
+        today = date.today()
+        
+        if end_date < start_date:
+            return jsonify({'error': 'End date must be on or after start date'}), 400
+        
+        if start_date < today:
+            return jsonify({'error': 'Cannot request time off for past dates'}), 400
+        
+        duration = (end_date - start_date).days + 1
+        if duration > 30:
+            return jsonify({'error': 'Time-off requests cannot exceed 30 days'}), 400
+        
+        overlapping = TimeOffRequest.query.filter(
+            TimeOffRequest.staff_id == data['staff_id'],
+            TimeOffRequest.status.in_(['pending', 'approved']),
+            TimeOffRequest.start_date <= end_date,
+            TimeOffRequest.end_date >= start_date
+        ).first()
+        
+        if overlapping:
+            return jsonify({'error': 'Overlapping time-off request already exists'}), 400
+        
         new_request = TimeOffRequest(
             staff_id=data['staff_id'],
-            start_date=datetime.strptime(data['start_date'], '%Y-%m-%d').date(),
-            end_date=datetime.strptime(data['end_date'], '%Y-%m-%d').date(),
-            reason=data.get('reason'),
+            start_date=start_date,
+            end_date=end_date,
+            reason=data.get('reason', ''),
             status='pending'
         )
+        
         db.session.add(new_request)
         db.session.commit()
+        
         return jsonify(new_request.to_dict()), 201
-    except KeyError as ke:
-        return jsonify({'error': f'Missing required field: {str(ke)}'}), 400
+        
+    except KeyError as e:
+        return jsonify({'error': f'Missing required field: {str(e)}'}), 400
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
@@ -370,15 +412,16 @@ def update_time_off_request(id):
         data = request.get_json()
         
         if 'status' in data:
-            request_obj.status = data['status']
+            valid_statuses = ['pending', 'approved', 'denied']
+            if data['status'] not in valid_statuses:
+                return jsonify({'error': f'Status must be one of: {", ".join(valid_statuses)}'}), 400
+        
         if 'reason' in data:
             request_obj.reason = data['reason']
         
         db.session.commit()
         return jsonify(request_obj.to_dict()), 200
-    except ValueError as ve:
-        db.session.rollback()
-        return jsonify({'error': str(ve)}), 400
+        
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
