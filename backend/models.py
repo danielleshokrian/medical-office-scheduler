@@ -103,6 +103,11 @@ class Shift(db.Model):
     staff_member = db.relationship('Staff', back_populates='shifts')
     area = db.relationship('StaffArea', back_populates='shifts')
     
+    __table_args__ = (
+        db.Index('idx_shift_date_staff', 'date', 'staff_id'),  
+        db.Index('idx_shift_date_area', 'date', 'area_id'),   
+    )
+
     @validates('date')
     def validate_date(self, key, value):
         from datetime import date
@@ -129,10 +134,10 @@ class TimeOffRequest(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     staff_id = db.Column(db.Integer, db.ForeignKey('staff.id'), nullable=False)
-    start_date = db.Column(db.Date, nullable=False)
-    end_date = db.Column(db.Date, nullable=False)
+    start_date = db.Column(db.Date, nullable=False, index=True)
+    end_date = db.Column(db.Date, nullable=False, index=True)
     reason = db.Column(db.String(200), nullable=True)
-    status = db.Column(db.String(20), default='pending')
+    status = db.Column(db.String(20), default='pending', index=True)  # 'pending', 'approved', 'denied'
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     

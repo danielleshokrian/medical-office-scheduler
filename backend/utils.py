@@ -1,6 +1,8 @@
 from models import Shift, TimeOffRequest, Staff, StaffArea
 from datetime import datetime, timedelta
 from db import db
+from sqlalchemy.orm import joinedload
+
 
 def validate_shift(staff_id, area_id, date, start_time, end_time, shift_id=None):
     errors = []
@@ -141,7 +143,9 @@ def check_area_coverage(area_id, date):
     if not area:
         return False, ["Area not found"]
     
-    shifts = Shift.query.filter(
+    shifts = Shift.query.options(
+        joinedload(Shift.staff_member)
+    ).filter(
         Shift.area_id == area_id,
         Shift.date == date
     ).all()

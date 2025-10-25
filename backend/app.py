@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta, date
 from utils import validate_shift, check_area_coverage
 from ai_scheduler import generate_weekly_schedule
+from sqlalchemy.orm import joinedload
 
 load_dotenv()
 
@@ -197,14 +198,17 @@ def create_area():
 @app.route('/shifts', methods=['GET'])
 def get_shifts():
     try:
-        date = request.args.get('date')
+        date_param = request.args.get('date')
         staff_id = request.args.get('staff_id')
         area_id = request.args.get('area_id')
         
-        query = Shift.query
+        query = Shift.query.options(
+        joinedload(Shift.staff_member),
+        joinedload(Shift.area)
+        )
         
-        if date:
-            query_date = datetime.strptime(date, '%Y-%m-%d').date()
+        if date_param:
+            query_date = datetime.strptime(date_param, '%Y-%m-%d').date()
             query = query.filter_by(date=query_date)
         if staff_id:
             query = query.filter_by(staff_id=staff_id)
@@ -345,29 +349,19 @@ def delete_shift(id):
 @app.route('/time-off', methods=['GET'])
 def get_time_off_requests():
     try:
-        status = request.args.get('status')
-        staff_id = request.args.get('staff_id')
-        
-        query = TimeOffRequest.query
-        
-        if status:
-            query = query.filter_by(status=status)
-        if staff_id:
-            query = query.filter_by(staff_id=staff_id)
-        
-        requests = query.all()
+        requests = TimeOffRequest.query.options(
+            joinedload(TimeOffRequest.staff_member)
+        ).all()
         return jsonify([r.to_dict() for r in requests]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
 @app.route('/time-off/<int:id>', methods=['GET'])
 def get_time_off_request_by_id(id):
-    try:
-        request_obj = TimeOffRequest.query.get_or_404(id)
-        return jsonify(request_obj.to_dict()), 200
-    except Exception as e:
-        return jsonify({'error': 'Time-off request not found'}), 404
+    request_obj = TimeOffRequest.query.options(
+        joinedload(TimeOffRequest.staff_member)
+    ).get_or_404(id)
+    return jsonify(request_obj.to_dict()), 200
 
 
 @app.route('/time-off', methods=['POST'])
@@ -472,19 +466,30 @@ def delete_time_off_request(id):
 @app.route('/coverage/<int:area_id>/<string:date>', methods=['GET'])
 def get_area_coverage(area_id, date):
     try:
-        date_obj = datetime.strptime(date, '%Y-%m-%d').date()
-        is_covered, warnings = check_area_coverage(area_id, date_obj)
+        coverage_date = datetime.strptime(date, '%Y-%m-%d').date()
+        
+        shifts = Shift.query.options(
+            joinedload(Shift.staff_member)
+        ).filter(
+            Shift.area_id == area_id,
+            Shift.date == coverage_date
+        ).all()
+        
+        area = StaffArea.query.get_or_404(area_id)
+        
+        is_covered, warnings = check_area_coverage(area_id, coverage_date)
         
         return jsonify({
             'area_id': area_id,
+            'area_name': area.name,
             'date': date,
             'is_covered': is_covered,
-            'warnings': warnings
+            'warnings': warnings,
+            'shifts': [s.to_dict() for s in shifts]
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     
-
 @app.route('/ai/generate-schedule', methods=['POST', 'OPTIONS'])
 def ai_generate_schedule():
     if request.method == 'OPTIONS':
