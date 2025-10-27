@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { fetchWithAuth } from '../api';
 import './ScheduleCalendar.css';
 import ShiftForm from './ShiftForm';
 
@@ -63,7 +64,7 @@ const fetchCoverageData = async () => {
       coverageData[dateStr] = {};
       
       for (const area of areas) {
-        const response = await fetch(`http://127.0.0.1:5000/coverage/${area.id}/${dateStr}`);
+        const response = await fetchWithAuth(`http://127.0.0.1:5001/coverage/${area.id}/${dateStr}`);
         if (response.ok) {
           const data = await response.json();
           coverageData[dateStr][area.id] = data;
@@ -82,9 +83,9 @@ const fetchScheduleData = async () => {
     setLoading(true);
     
     const [areasResponse, shiftsResponse, staffResponse] = await Promise.all([
-      fetch('http://127.0.0.1:5000/areas'),
-      fetch('http://127.0.0.1:5000/shifts'),
-      fetch('http://127.0.0.1:5000/staff')
+      fetchWithAuth('http://127.0.0.1:5001/areas'),
+      fetchWithAuth('http://127.0.0.1:5001/shifts'),
+      fetchWithAuth('http://127.0.0.1:5001/staff')
     ]);
     
     if (!areasResponse.ok) throw new Error('Failed to fetch areas');
@@ -273,7 +274,7 @@ const handleShiftSubmit = (data) => {
   
   try {
     const monday = getMonday(currentWeek);
-    const response = await fetch('http://127.0.0.1:5000/ai/generate-schedule', {
+    const response = await fetchWithAuth('http://127.0.0.1:5001/ai/generate-schedule', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -314,7 +315,7 @@ const handleFillEmptyShifts = async () => {
   
   try {
     const monday = getMonday(currentWeek);
-    const response = await fetch('http://127.0.0.1:5000/ai/generate-schedule', {
+    const response = await fetchWithAuth('http://127.0.0.1:5001/ai/generate-schedule', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -363,7 +364,7 @@ const handleApplySchedule = async () => {
       'Click Cancel to keep existing shifts and add new ones'
     );
     
-    const response = await fetch('http://127.0.0.1:5000/ai/apply-schedule', {
+    const response = await fetchWithAuth('http://127.0.0.1:5001/ai/apply-schedule', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -436,7 +437,7 @@ const restoreShiftsFromHistory = async (historicalShifts) => {
     });
     
     for (const shift of currentWeekShifts) {
-      await fetch(`http://127.0.0.1:5000/shifts/${shift.id}`, {
+      await fetchWithAuth(`http://127.0.0.1:5001/shifts/${shift.id}`, {
         method: 'DELETE'
       });
     }
@@ -445,7 +446,7 @@ const restoreShiftsFromHistory = async (historicalShifts) => {
     for (const shift of historicalShifts) {
       const shiftDate = new Date(shift.date);
       if (shiftDate >= monday && shiftDate <= weekEnd) {
-        await fetch('http://127.0.0.1:5000/shifts', {
+        await fetchWithAuth('http://127.0.0.1:5001/shifts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -482,7 +483,7 @@ const handleClearSchedule = async () => {
     });
     
     for (const shift of weekShifts) {
-      await fetch(`http://127.0.0.1:5000/shifts/${shift.id}`, {
+      await fetchWithAuth(`http://127.0.0.1:5001/shifts/${shift.id}`, {
         method: 'DELETE'
       });
     }

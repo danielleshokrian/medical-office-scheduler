@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { fetchWithAuth } from '../api';
 import './ShiftForm.css';
 
 function ShiftForm({ isOpen, onClose, onSubmit, shift, areas, staff, selectedDate }) {
@@ -104,8 +105,8 @@ const calculateEndTime = (startTime, shiftLength) => {
 
     try {
       const url = shift 
-        ? `http://127.0.0.1:5000/shifts/${shift.id}`
-        : 'http://127.0.0.1:5000/shifts';
+        ? `http://127.0.0.1:5001/shifts/${shift.id}`
+        : 'http://127.0.0.1:5001/shifts';
       
       const method = shift ? 'PUT' : 'POST';
 
@@ -113,8 +114,8 @@ const calculateEndTime = (startTime, shiftLength) => {
       ...formData,
       override_validation: overrideValidation
     };
-      
-      const response = await fetch(url, {
+
+      const response = await fetchWithAuth(url, {
         method: method,
         headers: {
           'Content-Type': 'application/json'
@@ -134,7 +135,7 @@ const calculateEndTime = (startTime, shiftLength) => {
         if (shouldOverride) {
           setOverrideValidation(true);
           // Resubmit immediately with override flag
-          const retryResponse = await fetch(url, {
+          const retryResponse = await fetchWithAuth(url, {
             method: method,
             headers: {
               'Content-Type': 'application/json'
@@ -180,7 +181,7 @@ const calculateEndTime = (startTime, shiftLength) => {
     setLoading(true);
     
     try {
-      const response = await fetch(`http://127.0.0.1:5000/shifts/${shift.id}`, {
+      const response = await fetchWithAuth(`http://127.0.0.1:5001/shifts/${shift.id}`, {
         method: 'DELETE'
       });
 

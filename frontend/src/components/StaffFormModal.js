@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { fetchWithAuth } from '../api.js';
 import './StaffFormModal.css';
 
 function StaffFormModal({ isOpen, onClose, onSubmit, staff }) {
@@ -64,7 +65,7 @@ useEffect(() => {
 }, [isOpen]);
 const fetchAreas = async () => {
   try {
-    const response = await fetch('http://127.0.0.1:5000/areas');
+    const response = await fetchWithAuth('http://127.0.0.1:5001/areas');
     if (response.ok) {
       const data = await response.json();
       setAreas(data);
@@ -160,8 +161,8 @@ useEffect(() => {
 
     try {
       const url = staff 
-        ? `http://127.0.0.1:5000/staff/${staff.id}`
-        : 'http://127.0.0.1:5000/staff';
+        ? `http://127.0.0.1:5001/staff/${staff.id}`
+        : 'http://127.0.0.1:5001/staff';
       
       const method = staff ? 'PUT' : 'POST';
 
@@ -179,8 +180,8 @@ useEffect(() => {
         flexible_days_off: formData.flexible_days_off.length > 0 ? JSON.stringify(formData.flexible_days_off) : null,
         is_active: formData.is_active
       };
-      
-      const response = await fetch(url, {
+
+      const response = await fetchWithAuth(url, {
         method: method,
         headers: {
           'Content-Type': 'application/json'

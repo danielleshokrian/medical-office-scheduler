@@ -1,6 +1,8 @@
 from db import db
 from sqlalchemy.orm import validates
 from datetime import datetime, time
+from flask_bcrypt import generate_password_hash, check_password_hash
+
 
 class Staff(db.Model):
     __tablename__ = 'staff'
@@ -183,4 +185,31 @@ class AISuggestion(db.Model):
             'constraints_met': self.constraints_met,
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M'),
             'accepted': self.accepted
+        }
+    
+class User(db.Model):
+    __tablename__ = 'user'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    role = db.Column(db.String(20), default='user')  # 'admin' or 'user'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def set_password(self, password):
+        """Hash and set password"""
+        self.password_hash = generate_password_hash(password).decode('utf-8')
+    
+    def check_password(self, password):
+        """Check if password matches hash"""
+        return check_password_hash(self.password_hash, password)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'username': self.username,
+            'email': self.email,
+            'role': self.role,
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }

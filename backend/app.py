@@ -1,7 +1,11 @@
 from flask import Flask, request, jsonify
 from flask_migrate import Migrate
 from flask_cors import CORS, cross_origin
-from models import Staff, StaffArea, Shift, TimeOffRequest, AISuggestion
+from flask_jwt_extended import (
+    JWTManager, create_access_token, create_refresh_token,
+    jwt_required, get_jwt_identity, get_jwt
+)
+from models import Staff, StaffArea, Shift, TimeOffRequest, AISuggestion, User
 from db import db
 import os
 import json
@@ -14,16 +18,138 @@ from sqlalchemy.orm import joinedload
 load_dotenv()
 
 app = Flask(__name__)
+
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'postgresql://localhost/medical_scheduler')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
+
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key-change-in-production')
+
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
+app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
+
+app.config["JWT_TOKEN_LOCATION"] = ["headers"]
+app.config["JWT_HEADER_NAME"] = "Authorization" # default, optional
+app.config["JWT_HEADER_TYPE"] = "Bearer"    
 
 db.init_app(app)
 migrate = Migrate(app, db)
-CORS(app, origins=["http://localhost:3000", "http://127.0.0.1:3000"], allow_headers="*", methods=["GET", "POST", "PUT", "DELETE"])
+jwt = JWTManager(app)  
 
+CORS(app, 
+     resources={r"/*": {"origins": "*"}},
+     allow_headers=["Content-Type", "Authorization"],  
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     supports_credentials=True)
+
+@app.route('/auth/register', methods=['POST'])
+def register():
+    """Register a new user"""
+    try:
+        data = request.get_json()
+        
+        if not all(k in data for k in ['username', 'email', 'password']):
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        if User.query.filter_by(username=data['username']).first():
+            return jsonify({'error': 'Username already exists'}), 400
+        
+        if User.query.filter_by(email=data['email']).first():
+            return jsonify({'error': 'Email already exists'}), 400
+        
+        user = User(
+            username=data['username'],
+            email=data['email'],
+            role=data.get('role', 'user')
+        )
+        user.set_password(data['password'])
+        
+        db.session.add(user)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'User registered successfully',
+            'user': user.to_dict()
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/auth/login', methods=['POST'])
+def login():
+    """Login and get JWT tokens"""
+    try:
+        data = request.get_json()
+        
+        if not all(k in data for k in ['username', 'password']):
+            return jsonify({'error': 'Missing username or password'}), 400
+        
+        user = User.query.filter_by(username=data['username']).first()
+        
+        if not user or not user.check_password(data['password']):
+            return jsonify({'error': 'Invalid username or password'}), 401
+        
+        access_token = create_access_token(
+            identity=str(user.id),
+            additional_claims={'role': user.role}
+        )
+        refresh_token = create_refresh_token(identity=str(user.id))
+
+        return jsonify({
+            'message': 'Login successful',
+            'access_token': access_token,
+            'refresh_token': refresh_token,
+            'user': user.to_dict()
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/auth/refresh', methods=['POST'])
+#@jwt_required(refresh=True)
+def refresh():
+    """Get new access token using refresh token"""
+    current_user_id = get_jwt_identity()
+    user = User.query.get(int(current_user_id))
+    
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    access_token = create_access_token(
+        identity=str(user.id),
+        additional_claims={'role': user.role}
+    )
+    
+    return jsonify({'access_token': access_token}), 200
+
+
+@app.route('/auth/me', methods=['GET'])
+@jwt_required()
+def get_current_user():
+    """Get current user info"""
+    try:
+        current_user_id = get_jwt_identity()
+        print("Authorization header:", request.headers.get("Authorization"))
+        print(f"Getting user with ID: {current_user_id}")  # ADD THIS
+        
+        user = User.query.get(current_user_id)
+        
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        return jsonify(user.to_dict()), 200
+        
+    except Exception as e:
+        print(f"Error in /auth/me: {str(e)}")  # ADD THIS
+        import traceback
+        traceback.print_exc()  # ADD THIS
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/')
+@jwt_required()
 def home():
     return "<h1>Medical Office Scheduler API</h1>", 200
 
@@ -31,6 +157,7 @@ def home():
 # ========== STAFF ROUTES ==========
 
 @app.route('/staff', methods=['GET'])
+@jwt_required()
 def get_staff():
     try:
         role = request.args.get('role')
@@ -49,6 +176,7 @@ def get_staff():
 
 
 @app.route('/staff/<int:id>', methods=['GET'])
+@jwt_required()
 def get_staff_by_id(id):
     try:
         staff = Staff.query.get_or_404(id)
@@ -58,6 +186,7 @@ def get_staff_by_id(id):
 
 
 @app.route('/staff', methods=['POST'])
+@jwt_required()
 def create_staff():
     try:
         data = request.get_json()
@@ -94,6 +223,7 @@ def create_staff():
 
 
 @app.route('/staff/<int:id>', methods=['PUT'])
+@jwt_required()
 def update_staff(id):
     try:
         staff = Staff.query.get_or_404(id)
@@ -117,6 +247,7 @@ def update_staff(id):
 
 
 @app.route('/staff/<int:id>', methods=['DELETE'])
+@jwt_required()
 def delete_staff(id):
     try:
         staff = Staff.query.get_or_404(id)
@@ -129,6 +260,7 @@ def delete_staff(id):
 
 
 @app.route('/staff/<int:id>/schedule', methods=['GET'])
+@jwt_required()
 def get_staff_schedule(id):
     try:
         staff = Staff.query.get_or_404(id)
@@ -157,6 +289,7 @@ def get_staff_schedule(id):
 # ========== STAFF AREA ROUTES ==========
 
 @app.route('/areas', methods=['GET'])
+@jwt_required()
 def get_areas():
     try:
         areas = StaffArea.query.all()
@@ -166,6 +299,7 @@ def get_areas():
 
 
 @app.route('/areas/<int:id>', methods=['GET'])
+@jwt_required()
 def get_area_by_id(id):
     try:
         area = StaffArea.query.get_or_404(id)
@@ -175,6 +309,7 @@ def get_area_by_id(id):
 
 
 @app.route('/areas', methods=['POST'])
+@jwt_required()
 def create_area():
     try:
         data = request.get_json()
@@ -196,6 +331,7 @@ def create_area():
 # ========== SHIFT ROUTES ==========
 
 @app.route('/shifts', methods=['GET'])
+@jwt_required()
 def get_shifts():
     try:
         date_param = request.args.get('date')
@@ -221,6 +357,7 @@ def get_shifts():
         return jsonify({'error': str(e)}), 500
     
 @app.route('/shifts', methods=['POST'])
+@jwt_required()
 def create_shift():
     try:
         data = request.get_json()
@@ -291,6 +428,7 @@ def create_shift():
 
 
 @app.route('/shifts/<int:id>', methods=['GET'])
+@jwt_required()
 def get_shift_by_id(id):
     try:
         shift = Shift.query.get_or_404(id)
@@ -300,6 +438,7 @@ def get_shift_by_id(id):
 
 
 @app.route('/shifts/<int:id>', methods=['PUT'])
+@jwt_required()
 def update_shift(id):
     try:
         shift = Shift.query.get_or_404(id)
@@ -333,6 +472,7 @@ def update_shift(id):
 
 
 @app.route('/shifts/<int:id>', methods=['DELETE'])
+@jwt_required()
 def delete_shift(id):
     try:
         shift = Shift.query.get_or_404(id)
@@ -347,6 +487,7 @@ def delete_shift(id):
 # ========== TIME OFF REQUEST ROUTES ==========
 
 @app.route('/time-off', methods=['GET'])
+@jwt_required()
 def get_time_off_requests():
     try:
         requests = TimeOffRequest.query.options(
@@ -357,6 +498,7 @@ def get_time_off_requests():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/time-off/<int:id>', methods=['GET'])
+@jwt_required()
 def get_time_off_request_by_id(id):
     request_obj = TimeOffRequest.query.options(
         joinedload(TimeOffRequest.staff_member)
@@ -365,6 +507,7 @@ def get_time_off_request_by_id(id):
 
 
 @app.route('/time-off', methods=['POST'])
+@jwt_required()
 def create_time_off_request():
     try:
         data = request.get_json()
@@ -429,6 +572,7 @@ def create_time_off_request():
 
 
 @app.route('/time-off/<int:id>', methods=['PUT'])
+@jwt_required()
 def update_time_off_request(id):
     try:
         request_obj = TimeOffRequest.query.get_or_404(id)
@@ -453,6 +597,7 @@ def update_time_off_request(id):
 
 
 @app.route('/time-off/<int:id>', methods=['DELETE'])
+@jwt_required()
 def delete_time_off_request(id):
     try:
         request_obj = TimeOffRequest.query.get_or_404(id)
@@ -464,6 +609,7 @@ def delete_time_off_request(id):
         return jsonify({'error': str(e)}), 500
     
 @app.route('/coverage/<int:area_id>/<string:date>', methods=['GET'])
+@jwt_required()
 def get_area_coverage(area_id, date):
     try:
         coverage_date = datetime.strptime(date, '%Y-%m-%d').date()
@@ -491,6 +637,7 @@ def get_area_coverage(area_id, date):
         return jsonify({'error': str(e)}), 500
     
 @app.route('/ai/generate-schedule', methods=['POST', 'OPTIONS'])
+@jwt_required()
 def ai_generate_schedule():
     if request.method == 'OPTIONS':
         return '', 200
@@ -533,6 +680,7 @@ def ai_generate_schedule():
 
 
 @app.route('/ai/apply-schedule', methods=['POST', 'OPTIONS'])
+@jwt_required()
 def apply_ai_schedule():
     """Apply AI suggestions by creating actual shifts"""
     if request.method == 'OPTIONS':
@@ -544,7 +692,6 @@ def apply_ai_schedule():
         clear_existing = data.get('clear_existing', False)
         week_start = datetime.strptime(data['week_start_date'], '%Y-%m-%d').date()
         
-        # Optionally clear existing shifts for the week
         if clear_existing:
             week_end = week_start + timedelta(days=4)
             Shift.query.filter(
@@ -552,7 +699,6 @@ def apply_ai_schedule():
                 Shift.date <= week_end
             ).delete()
         
-        # Create shifts
         created_shifts = []
         for shift_data in shifts_data:
             new_shift = Shift(
@@ -581,5 +727,5 @@ def apply_ai_schedule():
 
 
 if __name__ == '__main__':
-    app.run(port=5000, debug=True)
+    app.run(port=5001, debug=True)
 

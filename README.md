@@ -177,7 +177,7 @@ OPENAI_API_KEY=sk-your-openai-api-key-here
 
 ### Frontend Configuration
 
-No additional configuration needed. The frontend connects to `http://127.0.0.1:5000` by default.
+No additional configuration needed. The frontend connects to `http://127.0.0.1:5001` by default.
 
 ---
 
@@ -190,7 +190,7 @@ source venv/bin/activate
 python app.py
 ```
 
-Backend will run on `http://127.0.0.1:5000`
+Backend will run on `http://127.0.0.1:5001`
 
 ### Start Frontend Development Server
 ```bash
@@ -463,7 +463,7 @@ Error: Failed to fetch
 ```
 - Ensure backend is running on port 5000
 - Check CORS is enabled in `app.py`
-- Verify fetch URLs use `http://127.0.0.1:5000`
+- Verify fetch URLs use `http://127.0.0.1:5001`
 
 **4. AI Schedule Generation Not Working**
 ```

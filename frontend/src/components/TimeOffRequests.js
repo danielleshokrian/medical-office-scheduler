@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import TimeOffForm from './TimeOffForm';
+import { fetchWithAuth } from '../api.js';
 import './TimeOffRequests.css';
 
 function TimeOffRequests() {
@@ -19,8 +20,8 @@ function TimeOffRequests() {
       setLoading(true);
       
       const [requestsResponse, staffResponse] = await Promise.all([
-        fetch('http://127.0.0.1:5000/time-off'),
-        fetch('http://127.0.0.1:5000/staff')
+        fetchWithAuth('http://127.0.0.1:5001/time-off'),
+        fetchWithAuth('http://127.0.0.1:5001/staff')
       ]);
 
       if (!requestsResponse.ok) throw new Error('Failed to fetch time-off requests');
@@ -40,7 +41,7 @@ function TimeOffRequests() {
 
   const handleStatusUpdate = async (requestId, newStatus) => {
     try {
-      const response = await fetch(`http://127.0.0.1:5000/time-off/${requestId}`, {
+      const response = await fetchWithAuth(`http://127.0.0.1:5001/time-off/${requestId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
@@ -60,7 +61,7 @@ function TimeOffRequests() {
     }
 
     try {
-      const response = await fetch(`http://127.0.0.1:5000/time-off/${requestId}`, {
+      const response = await fetchWithAuth(`http://127.0.0.1:5001/time-off/${requestId}`, {
         method: 'DELETE'
       });
 

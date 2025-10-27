@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { fetchWithAuth } from '../api.js';
 import './TimeOffForm.css';
 
 function TimeOffForm({ isOpen, onClose, onSubmit, staff }) {
@@ -48,7 +49,7 @@ function TimeOffForm({ isOpen, onClose, onSubmit, staff }) {
     setError('');
 
     try {
-      const response = await fetch('http://127.0.0.1:5000/time-off', {
+      const response = await fetchWithAuth('http://127.0.0.1:5001/time-off', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
