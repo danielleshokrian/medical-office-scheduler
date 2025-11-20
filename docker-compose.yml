@@ -1,0 +1,153 @@
+version: '3.8'
+
+services:
+
+  # PostgreSQL Database
+
+  postgres:
+
+    image: postgres:15-alpine
+
+    container_name: scheduler-db
+
+    environment:
+
+      POSTGRES_DB: medical_scheduler
+
+      POSTGRES_USER: scheduler_user
+
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+
+    volumes:
+
+      - postgres_data:/var/lib/postgresql/data
+
+    ports:
+
+      - "5432:5432"  # Expose for local development
+
+    healthcheck:
+
+      test: ["CMD-SHELL", "pg_isready -U scheduler_user -d medical_scheduler"]
+
+      interval: 10s
+
+      timeout: 5s
+
+      retries: 5
+
+    restart: unless-stopped
+
+    networks:
+
+      - scheduler-network
+
+ 
+
+  # Flask Backend
+
+  backend:
+
+    build:
+
+      context: ./backend
+
+      dockerfile: Dockerfile
+
+    container_name: scheduler-backend
+
+    environment:
+
+      DATABASE_URL: postgresql://scheduler_user:${DB_PASSWORD}@postgres:5432/medical_scheduler
+
+      SECRET_KEY: ${SECRET_KEY}
+
+      FLASK_ENV: production
+
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+
+      PORT: 5001
+
+    depends_on:
+
+      postgres:
+
+        condition: service_healthy
+
+    ports:
+
+      - "5001:5001"
+
+    restart: unless-stopped
+
+    networks:
+
+      - scheduler-network
+
+    healthcheck:
+
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+
+      interval: 30s
+
+      timeout: 10s
+
+      retries: 3
+
+ 
+
+  # React Frontend with Nginx
+
+  frontend:
+
+    build:
+
+      context: ./frontend
+
+      dockerfile: Dockerfile
+
+      args:
+
+        REACT_APP_API_URL: ${REACT_APP_API_URL:-http://localhost:5001}
+
+    container_name: scheduler-frontend
+
+    ports:
+
+      - "80:80"
+
+      - "443:443"
+
+    volumes:
+
+      - ./ssl/certs:/etc/nginx/ssl:ro
+
+      # Mount nginx config for easy updates
+
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+    depends_on:
+
+      - backend
+
+    restart: unless-stopped
+
+    networks:
+
+      - scheduler-network
+
+ 
+
+volumes:
+
+  postgres_data:
+
+    driver: local
+
+ 
+
+networks:
+
+  scheduler-network:
+
+    driver: bridge

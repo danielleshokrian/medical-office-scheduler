@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchWithAuth } from '../api';
 import './ShiftForm.css';
+import { API_ENDPOINTS } from '../config';
 
 function ShiftForm({ isOpen, onClose, onSubmit, shift, areas, staff, selectedDate }) {
   const [formData, setFormData] = useState({
@@ -104,9 +105,9 @@ const calculateEndTime = (startTime, shiftLength) => {
     setError('');
 
     try {
-      const url = shift 
-        ? `http://127.0.0.1:5001/shifts/${shift.id}`
-        : 'http://127.0.0.1:5001/shifts';
+        const url = shift
+        ? API_ENDPOINTS.SHIFTS_BY_ID(shift.id)
+        : API_ENDPOINTS.SHIFTS;
       
       const method = shift ? 'PUT' : 'POST';
 
@@ -181,7 +182,7 @@ const calculateEndTime = (startTime, shiftLength) => {
     setLoading(true);
     
     try {
-      const response = await fetchWithAuth(`http://127.0.0.1:5001/shifts/${shift.id}`, {
+      const response = await fetchWithAuth(API_ENDPOINTS.SHIFTS_BY_ID(shift.id), {
         method: 'DELETE'
       });
 

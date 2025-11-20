@@ -9,38 +9,63 @@ from models import Staff, StaffArea, Shift, TimeOffRequest, AISuggestion, User
 from db import db
 import os
 import json
+import logging
+from logging.handlers import RotatingFileHandler
 from dotenv import load_dotenv
 from datetime import datetime, timedelta, date
 from utils import validate_shift, check_area_coverage
 from ai_scheduler import generate_weekly_schedule
 from sqlalchemy.orm import joinedload
+from config import get_config
 
 load_dotenv()
 
 app = Flask(__name__)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'postgresql://localhost/medical_scheduler')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
-app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key-change-in-production')
-
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
-app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
-
-app.config["JWT_TOKEN_LOCATION"] = ["headers"]
-app.config["JWT_HEADER_NAME"] = "Authorization" # default, optional
-app.config["JWT_HEADER_TYPE"] = "Bearer"    
+app.config.from_object(get_config())
 
 db.init_app(app)
-migrate = Migrate(app, db)
-jwt = JWTManager(app)  
 
-CORS(app, 
-     resources={r"/*": {"origins": "*"}},
-     allow_headers=["Content-Type", "Authorization"],  
-     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-     supports_credentials=True)
+migrate = Migrate(app, db)
+
+jwt = JWTManager(app)
+
+if os.getenv('FLASK_ENV') == 'production':
+    allowed_origins = app.config.get('CORS_ORIGINS', ['https://yourdomain.com'])
+    CORS(app,
+         resources={r"/*": {"origins": allowed_origins}},
+         allow_headers=["Content-Type", "Authorization"],
+         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+         supports_credentials=True)
+
+else:
+    CORS(app,
+         resources={r"/*": {"origins": ["http://localhost:3000", "http://127.0.0.1:3000"]}},
+         allow_headers=["Content-Type", "Authorization"],
+         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+         supports_credentials=True)
+
+if not app.debug:
+    if not os.path.exists('logs'):
+        os.mkdir('logs')
+
+    file_handler = RotatingFileHandler(
+        'logs/scheduler.log',
+        maxBytes=10240000,  # 10MB
+        backupCount=10
+
+    )
+
+    file_handler.setFormatter(logging.Formatter(
+        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+    ))
+
+    file_handler.setLevel(logging.INFO)
+    app.logger.addHandler(file_handler)
+
+    app.logger.setLevel(logging.INFO)
+
+    app.logger.info('Medical Office Scheduler startup')
 
 @app.route('/auth/register', methods=['POST'])
 def register():
@@ -133,7 +158,7 @@ def get_current_user():
     try:
         current_user_id = get_jwt_identity()
         print("Authorization header:", request.headers.get("Authorization"))
-        print(f"Getting user with ID: {current_user_id}")  # ADD THIS
+        print(f"Getting user with ID: {current_user_id}")  
         
         user = User.query.get(current_user_id)
         
@@ -143,10 +168,49 @@ def get_current_user():
         return jsonify(user.to_dict()), 200
         
     except Exception as e:
-        print(f"Error in /auth/me: {str(e)}")  # ADD THIS
+        print(f"Error in /auth/me: {str(e)}")  
         import traceback
-        traceback.print_exc()  # ADD THIS
+        traceback.print_exc()  
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/health', methods=['GET'])
+
+def health_check():
+    try:
+        db.session.execute('SELECT 1')
+        return jsonify({
+            'status': 'healthy',
+            'service': 'medical-office-scheduler',
+            'database': 'connected',
+            'timestamp': datetime.utcnow().isoformat()
+        }), 200
+    except Exception as e:
+        app.logger.error(f'Health check failed: {str(e)}')
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e),
+            'timestamp': datetime.utcnow().isoformat()
+        }), 500
+
+@app.route('/ready', methods=['GET'])
+def readiness_check():
+    try:
+        db.session.execute('SELECT 1')
+
+        return jsonify({
+            'ready': True,
+            'checks': {
+                'database': 'ok'
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'ready': False,
+            'checks': {
+                'database': 'failed'
+            },
+            'error': str(e)
+        }), 503
 
 @app.route('/')
 @jwt_required()

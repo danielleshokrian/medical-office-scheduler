@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { fetchWithAuth } from '../api';
 import './ScheduleCalendar.css';
 import ShiftForm from './ShiftForm';
+import { API_ENDPOINTS } from '../config';
 
 function ScheduleCalendar() {
   const [shifts, setShifts] = useState([]);
@@ -64,7 +65,7 @@ const fetchCoverageData = async () => {
       coverageData[dateStr] = {};
       
       for (const area of areas) {
-        const response = await fetchWithAuth(`http://127.0.0.1:5001/coverage/${area.id}/${dateStr}`);
+        const response = await fetchWithAuth(API_ENDPOINTS.COVERAGE(area.id, dateStr));
         if (response.ok) {
           const data = await response.json();
           coverageData[dateStr][area.id] = data;
@@ -83,9 +84,9 @@ const fetchScheduleData = async () => {
     setLoading(true);
     
     const [areasResponse, shiftsResponse, staffResponse] = await Promise.all([
-      fetchWithAuth('http://127.0.0.1:5001/areas'),
-      fetchWithAuth('http://127.0.0.1:5001/shifts'),
-      fetchWithAuth('http://127.0.0.1:5001/staff')
+      fetchWithAuth(API_ENDPOINTS.AREAS),
+      fetchWithAuth(API_ENDPOINTS.SHIFTS),
+      fetchWithAuth(API_ENDPOINTS.STAFF)
     ]);
     
     if (!areasResponse.ok) throw new Error('Failed to fetch areas');
@@ -274,7 +275,7 @@ const handleShiftSubmit = (data) => {
   
   try {
     const monday = getMonday(currentWeek);
-    const response = await fetchWithAuth('http://127.0.0.1:5001/ai/generate-schedule', {
+    const response = await fetchWithAuth(API_ENDPOINTS.AI_GENERATE, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -315,7 +316,7 @@ const handleFillEmptyShifts = async () => {
   
   try {
     const monday = getMonday(currentWeek);
-    const response = await fetchWithAuth('http://127.0.0.1:5001/ai/generate-schedule', {
+    const response = await fetchWithAuth(API_ENDPOINTS.AI_GENERATE, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -363,8 +364,8 @@ const handleApplySchedule = async () => {
       'Click OK to replace everything\n' +
       'Click Cancel to keep existing shifts and add new ones'
     );
-    
-    const response = await fetchWithAuth('http://127.0.0.1:5001/ai/apply-schedule', {
+
+    const response = await fetchWithAuth(API_ENDPOINTS.AI_APPLY, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -437,7 +438,7 @@ const restoreShiftsFromHistory = async (historicalShifts) => {
     });
     
     for (const shift of currentWeekShifts) {
-      await fetchWithAuth(`http://127.0.0.1:5001/shifts/${shift.id}`, {
+      await fetchWithAuth(API_ENDPOINTS.SHIFTS_BY_ID(shift.id), {
         method: 'DELETE'
       });
     }
@@ -446,7 +447,7 @@ const restoreShiftsFromHistory = async (historicalShifts) => {
     for (const shift of historicalShifts) {
       const shiftDate = new Date(shift.date);
       if (shiftDate >= monday && shiftDate <= weekEnd) {
-        await fetchWithAuth('http://127.0.0.1:5001/shifts', {
+        await fetchWithAuth(API_ENDPOINTS.SHIFTS, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -483,7 +484,7 @@ const handleClearSchedule = async () => {
     });
     
     for (const shift of weekShifts) {
-      await fetchWithAuth(`http://127.0.0.1:5001/shifts/${shift.id}`, {
+      await fetchWithAuth(API_ENDPOINTS.SHIFTS_BY_ID(shift.id), {
         method: 'DELETE'
       });
     }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { fetchWithAuth } from '../api.js';
 import './StaffFormModal.css';
+import { API_ENDPOINTS } from '../config';
 
 function StaffFormModal({ isOpen, onClose, onSubmit, staff }) {
   const [formData, setFormData] = useState({
@@ -65,7 +66,7 @@ useEffect(() => {
 }, [isOpen]);
 const fetchAreas = async () => {
   try {
-    const response = await fetchWithAuth('http://127.0.0.1:5001/areas');
+    const response = await fetchWithAuth(API_ENDPOINTS.AREAS);
     if (response.ok) {
       const data = await response.json();
       setAreas(data);
@@ -160,9 +161,9 @@ useEffect(() => {
     setError('');
 
     try {
-      const url = staff 
-        ? `http://127.0.0.1:5001/staff/${staff.id}`
-        : 'http://127.0.0.1:5001/staff';
+         const url = staff
+        ? API_ENDPOINTS.STAFF_BY_ID(staff.id)
+        : API_ENDPOINTS.STAFF;
       
       const method = staff ? 'PUT' : 'POST';
 

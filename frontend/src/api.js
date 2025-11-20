@@ -1,3 +1,5 @@
+import { API_ENDPOINTS } from './config';
+
 export const fetchWithAuth = async (url, options = {}) => {
   const token = localStorage.getItem('access_token');
   
@@ -18,7 +20,7 @@ export const fetchWithAuth = async (url, options = {}) => {
   if (response.status === 401) {
     const refreshToken = localStorage.getItem('refresh_token');
     if (refreshToken) {
-      const refreshResponse = await fetch('http://127.0.0.1:5001/auth/refresh', {
+      const refreshResponse = await fetch(API_ENDPOINTS.AUTH_REFRESH, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${refreshToken}`

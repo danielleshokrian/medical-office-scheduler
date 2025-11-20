@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import StaffFormModal from './StaffFormModal.js';
 import './StaffList.css';
 import { fetchWithAuth } from '../api.js';
+import { API_ENDPOINTS } from '../config';
 
 function StaffList() {
   const [staff, setStaff] = useState([]);
@@ -24,7 +25,7 @@ function StaffList() {
   const fetchStaff = async () => {
     try {
       setLoading(true);
-      const response = await fetchWithAuth('http://127.0.0.1:5001/staff?active=false'); // Get all staff including inactive
+      const response = await fetchWithAuth(API_ENDPOINTS.STAFF + '?active=false'); // Get all staff including inactive
       if (!response.ok) throw new Error('Failed to fetch staff');
       const data = await response.json();
       setStaff(data);
@@ -72,7 +73,7 @@ function StaffList() {
 
   const handleToggleActive = async (staffMember) => {
     try {
-      const response = await fetchWithAuth(`http://127.0.0.1:5001/staff/${staffMember.id}`, {
+      const response = await fetchWithAuth(API_ENDPOINTS.STAFF_BY_ID(staffMember.id), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_active: !staffMember.is_active })
