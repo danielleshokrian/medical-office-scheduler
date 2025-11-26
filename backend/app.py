@@ -40,8 +40,13 @@ if os.getenv('FLASK_ENV') == 'production':
          supports_credentials=True)
 
 else:
-    CORS(app,
-         resources={r"/*": {"origins": ["http://localhost:3000", "http://127.0.0.1:3000"]}},
+        CORS(app,
+         resources={r"/*": {"origins": [
+             "http://localhost:3000",
+             "http://127.0.0.1:3000",
+             "http://localhost",
+             "http://127.0.0.1"
+         ]}},
          allow_headers=["Content-Type", "Authorization"],
          methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
          supports_credentials=True)
