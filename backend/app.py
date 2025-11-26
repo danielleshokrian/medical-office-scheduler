@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, date
 from utils import validate_shift, check_area_coverage
 from ai_scheduler import generate_weekly_schedule
 from sqlalchemy.orm import joinedload
+from sqlalchemy import text
 from config import get_config
 
 load_dotenv()
@@ -177,7 +178,7 @@ def get_current_user():
 
 def health_check():
     try:
-        db.session.execute('SELECT 1')
+        db.session.execute(text('SELECT 1'))
         return jsonify({
             'status': 'healthy',
             'service': 'medical-office-scheduler',
@@ -195,7 +196,7 @@ def health_check():
 @app.route('/ready', methods=['GET'])
 def readiness_check():
     try:
-        db.session.execute('SELECT 1')
+        db.session.execute(text('SELECT 1'))
 
         return jsonify({
             'ready': True,
