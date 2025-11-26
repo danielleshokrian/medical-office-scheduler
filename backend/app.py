@@ -31,25 +31,24 @@ migrate = Migrate(app, db)
 
 jwt = JWTManager(app)
 
-if os.getenv('FLASK_ENV') == 'production':
-    allowed_origins = app.config.get('CORS_ORIGINS', ['https://yourdomain.com'])
-    CORS(app,
-         resources={r"/*": {"origins": allowed_origins}},
-         allow_headers=["Content-Type", "Authorization"],
-         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-         supports_credentials=True)
+allowed_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost",
+    "http://127.0.0.1"
 
-else:
-        CORS(app,
-         resources={r"/*": {"origins": [
-             "http://localhost:3000",
-             "http://127.0.0.1:3000",
-             "http://localhost",
-             "http://127.0.0.1"
-         ]}},
-         allow_headers=["Content-Type", "Authorization"],
-         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-         supports_credentials=True)
+]
+
+cors_origins_env = os.getenv('CORS_ORIGINS', '')
+if cors_origins_env:
+    custom_origins = [origin.strip() for origin in cors_origins_env.split(',')]
+    allowed_origins.extend(custom_origins)
+
+CORS(app,
+     resources={r"/*": {"origins": allowed_origins}},
+     allow_headers=["Content-Type", "Authorization"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     supports_credentials=True)
 
 if not app.debug:
     if not os.path.exists('logs'):
