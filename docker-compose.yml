@@ -122,6 +122,10 @@ services:
 
       - ./ssl/certs:/etc/nginx/ssl:ro
 
+      # Shared webroot for certbot ACME challenge (used by renew-ssl.sh)
+
+      - ./ssl/webroot:/var/www/certbot
+
       # Mount nginx config for easy updates
 
       - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro

@@ -248,7 +248,15 @@ setup() {
 
     fi
 
- 
+
+
+    # Get email for SSL certificate (Let's Encrypt)
+
+    echo
+
+    read -p "Enter your email for SSL certificate notifications (required for HTTPS): " CERTBOT_EMAIL
+
+
 
     # Create .env file
 
@@ -258,7 +266,7 @@ setup() {
 
 DB_PASSWORD=$DB_PASSWORD
 
- 
+
 
 # Flask
 
@@ -266,17 +274,25 @@ SECRET_KEY=$SECRET_KEY
 
 FLASK_ENV=production
 
- 
+
 
 # OpenAI
 
 OPENAI_API_KEY=$OPENAI_KEY
 
- 
+
 
 # API URL
 
 REACT_APP_API_URL=$API_URL
+
+
+
+# SSL / Domain
+
+DOMAIN=${DOMAIN:-chronamed.com}
+
+CERTBOT_EMAIL=$CERTBOT_EMAIL
 
 EOF
 
@@ -286,13 +302,13 @@ EOF
 
  
 
-    # Create SSL directory
+    # Create SSL directories
 
-    mkdir -p ssl/certs
+    mkdir -p ssl/certs ssl/webroot ssl/letsencrypt
 
-    log_info "Created ssl/certs directory for SSL certificates"
+    log_info "Created ssl/ directories for SSL certificates"
 
- 
+
 
     # Create backups directory
 
@@ -300,7 +316,7 @@ EOF
 
     log_info "Created backups directory"
 
- 
+
 
     # Display next steps
 
@@ -314,7 +330,9 @@ EOF
 
     echo "  1. Review and update .env file if needed"
 
-    echo "  2. If using custom domain, set up SSL certificates (see SSL-SETUP.md)"
+    echo "  2. Point your DNS to this server, then get your SSL cert:"
+
+    echo "       ./deploy.sh ssl-setup"
 
     echo "  3. Run: ./deploy.sh start"
 
@@ -710,6 +728,18 @@ case "$1" in
 
         ;;
 
+    ssl-setup)
+
+        ./renew-ssl.sh setup
+
+        ;;
+
+    renew-ssl)
+
+        ./renew-ssl.sh renew
+
+        ;;
+
     *)
 
         echo "Medical Office Scheduler - Deployment Script"
@@ -740,6 +770,10 @@ case "$1" in
 
         echo "  clean       - Clean up (WARNING: removes all data!)"
 
+        echo "  ssl-setup   - Get initial SSL certificate (first time or after expiry)"
+
+        echo "  renew-ssl   - Renew SSL certificate (no downtime)"
+
         echo
 
         echo "Examples:"
@@ -747,6 +781,8 @@ case "$1" in
         echo "  $0 setup                # First time setup"
 
         echo "  $0 start                # Start all services"
+
+        echo "  $0 ssl-setup            # Get/renew SSL certificate"
 
         echo "  $0 logs backend         # View backend logs"
 
