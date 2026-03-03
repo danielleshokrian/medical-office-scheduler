@@ -131,10 +131,13 @@ setup() {
             -out    "${CERTS_DIR}/fullchain.pem" \
             -days 1 -nodes \
             -subj "/CN=${DOMAIN}" 2>/dev/null
-        log_info "Temporary cert created. Starting nginx..."
-        docker-compose -f "${SCRIPT_DIR}/docker-compose.yml" up -d frontend
-        sleep 3
+        log_info "Temporary cert created."
     fi
+
+    # Always ensure nginx is running before the ACME challenge.
+    log_info "Starting/ensuring nginx is running..."
+    docker-compose -f "${SCRIPT_DIR}/docker-compose.yml" up -d frontend
+    sleep 3
 
     log_info "Requesting certificate from Let's Encrypt via webroot challenge..."
     run_certbot "certonly"
