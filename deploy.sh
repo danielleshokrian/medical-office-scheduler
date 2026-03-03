@@ -182,6 +182,10 @@ setup() {
 
             log_info "Keeping existing .env file"
 
+            # Still create required directories even if skipping .env
+            mkdir -p ssl/certs ssl/webroot ssl/letsencrypt backups
+            log_info "Ensured ssl/ and backups/ directories exist"
+
             return
 
         fi
