@@ -39,14 +39,17 @@ log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 log_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 log_error()   { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# Load DOMAIN/CERTBOT_EMAIL from .env if present
+# Load DOMAIN/CERTBOT_EMAIL from .env using grep (safe — avoids executing
+# any corrupt/ANSI-escaped lines that sourcing the file would trigger)
 if [ -f "${SCRIPT_DIR}/.env" ]; then
-    # shellcheck disable=SC1090
-    set -a; source "${SCRIPT_DIR}/.env"; set +a
+    _env_domain=$(grep -E '^DOMAIN=' "${SCRIPT_DIR}/.env" | head -1 | cut -d= -f2-)
+    _env_email=$(grep -E '^CERTBOT_EMAIL=' "${SCRIPT_DIR}/.env" | head -1 | cut -d= -f2-)
+    DOMAIN="${DOMAIN:-${_env_domain:-chronamed.com}}"
+    EMAIL="${CERTBOT_EMAIL:-$_env_email}"
+else
+    DOMAIN="${DOMAIN:-chronamed.com}"
+    EMAIL="${CERTBOT_EMAIL:-}"
 fi
-
-DOMAIN="${DOMAIN:-chronamed.com}"
-EMAIL="${CERTBOT_EMAIL:-}"
 
 check_email() {
     if [ -z "$EMAIL" ]; then

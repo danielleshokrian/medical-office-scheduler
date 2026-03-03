@@ -138,7 +138,7 @@ check_requirements() {
 
 generate_secrets() {
 
-    log_info "Generating secure secrets..."
+    log_info "Generating secure secrets..." >&2
 
  
 
