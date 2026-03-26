@@ -121,7 +121,7 @@ function TimeOffRequests() {
           <div>
             <h2>Scheduled Days Off</h2>
             <p className="tor-section-subtitle">
-              Regular weekly days off for 4-day/week staff — automatically approved, not counted as PTO.
+              Regular weekly days off for 4-day/week staff — requires admin approval, not counted as PTO.
             </p>
           </div>
           <button className="add-request-button day-off-button" onClick={() => openForm('day_off')}>
@@ -148,10 +148,23 @@ function TimeOffRequests() {
                       {req.reason && <span className="dayoff-reason">{req.reason}</span>}
                     </div>
                     <div className="dayoff-actions">
-                      <span className="status-badge status-approved">approved</span>
+                      <span className={`status-badge ${statusBadgeClass(req.status)}`}>
+                        {req.status}
+                      </span>
+                      {isAdmin && req.status === 'pending' && (
+                        <>
+                          <button className="approve-button" onClick={() => handleStatusUpdate(req.id, 'approved')}>
+                            ✓ Approve
+                          </button>
+                          <button className="deny-button" onClick={() => handleStatusUpdate(req.id, 'denied')}>
+                            ✗ Deny
+                          </button>
+                        </>
+                      )}
                       <button
                         className="delete-button"
                         onClick={() => handleDelete(req.id)}
+                        disabled={!isAdmin && req.status !== 'pending'}
                       >
                         Remove
                       </button>

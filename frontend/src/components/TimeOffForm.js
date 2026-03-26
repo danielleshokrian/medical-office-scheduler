@@ -126,7 +126,7 @@ function TimeOffForm({ isOpen, onClose, onSubmit, staff, fixedStaffId, defaultTy
 
         {isDayOff && (
           <p className="type-description">
-            For 4-day/week staff — select which day this week you will be off. Auto-approved, not counted as PTO.
+            For 4-day/week staff — select which day this week you will be off. Requires admin approval, not counted as PTO.
           </p>
         )}
 

@@ -721,8 +721,7 @@ def create_time_off_request():
             label = 'scheduled day off' if request_type == 'day_off' else 'time-off request'
             return jsonify({'error': f'An overlapping {label} already exists for that date'}), 400
 
-        # Scheduled day offs are auto-approved — no admin action needed
-        initial_status = 'approved' if request_type == 'day_off' else 'pending'
+        initial_status = 'pending'
 
         new_request = TimeOffRequest(
             staff_id=data['staff_id'],
