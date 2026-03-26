@@ -34,6 +34,17 @@ function Login() {
     }
   };
 
+  const handleNurseDemoLogin = async () => {
+    setError('');
+    const result = await login('lori', 'nurse123');
+
+    if (result.success) {
+      navigate('/');
+    } else {
+      setError(result.error);
+    }
+  };
+
   return (
     <div className="login-container">
       <div className="login-box">
@@ -96,7 +107,18 @@ function Login() {
               e.target.style.transform = 'translateY(0)';
             }}
           >
-            Try Demo Account
+            Nurse Admin Demo
+          </button>
+
+          <button
+            type="button"
+            onClick={handleNurseDemoLogin}
+            className="demo-button"
+            style={{
+              marginTop: '10px'
+            }}
+          >
+            Nurse Demo
           </button>
         </form>
         
@@ -106,7 +128,7 @@ function Login() {
           color: '#666',
           textAlign: 'center' 
         }}>
-          Demo account has pre-loaded staff and schedules
+          Use demo roles to test admin and nurse access
         </p>
       </div>
     </div>

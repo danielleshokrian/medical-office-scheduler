@@ -3,8 +3,11 @@ import { fetchWithAuth } from '../api';
 import './ScheduleCalendar.css';
 import ShiftForm from './ShiftForm';
 import { API_ENDPOINTS } from '../config';
+import { useAuth } from '../AuthContext';
 
 function ScheduleCalendar() {
+  const { user } = useAuth();
+  const canEditSchedule = user?.role === 'nurse_admin';
   const [shifts, setShifts] = useState([]);
   const [areas, setAreas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -508,56 +511,57 @@ const handleClearSchedule = async () => {
         </div>
 
         <div className="schedule-actions">
-          {/* History buttons */}
-          <button 
-            onClick={handleUndo}
-            className="history-button"
-            disabled={historyIndex <= 0}
-            title="Undo last change"
-          >
-            ↶ Undo
-          </button>
-          <button 
-            onClick={handleRedo}
-            className="history-button"
-            disabled={historyIndex >= history.length - 1}
-            title="Redo last undone change"
-          >
-            ↷ Redo
-          </button>
-          
-          <button onClick={() => handleAddShift()} className="add-shift-button">
-            + Add Shift
-          </button>
-                  
-            {/* AI Buttons */}
-            <div className="ai-buttons">
+          {canEditSchedule && (
+            <>
               <button 
-                onClick={handleFillEmptyShifts} 
-                className="ai-fill-button"
-                disabled={aiLoading || previewMode}
+                onClick={handleUndo}
+                className="history-button"
+                disabled={historyIndex <= 0}
+                title="Undo last change"
               >
-                Fill Empty Shifts
+                ↶ Undo
               </button>
               <button 
-                onClick={handleGenerateFullSchedule} 
-                className="ai-generate-button"
-                disabled={aiLoading || previewMode}
+                onClick={handleRedo}
+                className="history-button"
+                disabled={historyIndex >= history.length - 1}
+                title="Redo last undone change"
               >
-                🔄 Generate Full Schedule
+                ↷ Redo
               </button>
+              
+              <button onClick={() => handleAddShift()} className="add-shift-button">
+                + Add Shift
+              </button>
+                      
+                <div className="ai-buttons">
+                  <button 
+                    onClick={handleFillEmptyShifts} 
+                    className="ai-fill-button"
+                    disabled={aiLoading || previewMode}
+                  >
+                    Fill Empty Shifts
+                  </button>
+                  <button 
+                    onClick={handleGenerateFullSchedule} 
+                    className="ai-generate-button"
+                    disabled={aiLoading || previewMode}
+                  >
+                    🔄 Generate Full Schedule
+                  </button>
 
-              {/* Clear button */}
-              <button 
-                onClick={handleClearSchedule}
-                className="clear-schedule-button"
-                disabled={aiLoading || previewMode}
-              >
-                Clear Schedule
-              </button>
-            </div>
+                  <button 
+                    onClick={handleClearSchedule}
+                    className="clear-schedule-button"
+                    disabled={aiLoading || previewMode}
+                  >
+                    Clear Schedule
+                  </button>
+                </div>
+            </>
+          )}
           </div>
-                {previewMode && (
+                {previewMode && canEditSchedule && (
         <div className="preview-banner">
           <div className="preview-info">
             <strong>Preview Mode:</strong> {previewShifts.length} shifts suggested
@@ -628,7 +632,7 @@ const handleClearSchedule = async () => {
                           style={{ background: getStaffColor(shift.staff_id, shift.staff_role) }}
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (!shift.is_preview) {
+                            if (!shift.is_preview && canEditSchedule) {
                               handleEditShift(shift);
                             }
                           }}
@@ -658,7 +662,9 @@ const handleClearSchedule = async () => {
       <div className="schedule-header">
         <button onClick={switchToWeekView}>← Back to Week View</button>
         <h2>{selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</h2>
-        <button onClick={() => handleAddShift(selectedDate)} className="add-shift-button">+ Add Shift</button>
+        {canEditSchedule && (
+          <button onClick={() => handleAddShift(selectedDate)} className="add-shift-button">+ Add Shift</button>
+        )}
       </div>
 
       <div className="timeline-view">
@@ -694,7 +700,7 @@ const handleClearSchedule = async () => {
                           height: `${height}px`,
                           background: getStaffColor(shift.staff_id, shift.staff_role)
                         }}
-                        onClick={() => handleEditShift(shift)}
+                        onClick={() => canEditSchedule && handleEditShift(shift)}
                       >
                         <div className="timeline-staff-name">{shift.staff_name}</div>
                         <div className="timeline-staff-role">{shift.staff_role}</div>

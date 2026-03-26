@@ -72,14 +72,34 @@ if not app.debug:
 
     app.logger.info('Medical Office Scheduler startup')
 
+
+def get_authenticated_user():
+    current_user_id = get_jwt_identity()
+    if current_user_id is None:
+        return None
+    return User.query.get(int(current_user_id))
+
+
+def require_roles(*allowed_roles):
+    user = get_authenticated_user()
+    if not user:
+        return None, jsonify({'error': 'User not found'}), 404
+    if user.role not in allowed_roles:
+        return None, jsonify({'error': 'Forbidden'}), 403
+    return user, None, None
+
 @app.route('/auth/register', methods=['POST'])
 def register():
     """Register a new user"""
     try:
         data = request.get_json()
         
-        if not all(k in data for k in ['username', 'email', 'password']):
+        if not all(k in data for k in ['username', 'email', 'password', 'role']):
             return jsonify({'error': 'Missing required fields'}), 400
+
+        valid_roles = ['nurse_admin', 'nurse']
+        if data['role'] not in valid_roles:
+            return jsonify({'error': f'Role must be one of: {", ".join(valid_roles)}'}), 400
         
         if User.query.filter_by(username=data['username']).first():
             return jsonify({'error': 'Username already exists'}), 400
@@ -90,8 +110,18 @@ def register():
         user = User(
             username=data['username'],
             email=data['email'],
-            role=data.get('role', 'user')
+            role=data['role'],
+            staff_id=data.get('staff_id')
         )
+
+        if user.role == 'nurse' and not user.staff_id:
+            return jsonify({'error': 'staff_id is required for nurse users'}), 400
+
+        if user.staff_id:
+            linked_staff = Staff.query.get(user.staff_id)
+            if not linked_staff:
+                return jsonify({'error': 'Staff member not found for provided staff_id'}), 404
+
         user.set_password(data['password'])
         
         db.session.add(user)
@@ -158,14 +188,14 @@ def refresh():
 
 @app.route('/auth/me', methods=['GET'])
 @jwt_required()
-def get_current_user():
+def get_current_user_info():
     """Get current user info"""
     try:
         current_user_id = get_jwt_identity()
         print("Authorization header:", request.headers.get("Authorization"))
         print(f"Getting user with ID: {current_user_id}")  
         
-        user = User.query.get(current_user_id)
+        user = User.query.get(int(current_user_id))
         
         if not user:
             return jsonify({'error': 'User not found'}), 404
@@ -258,6 +288,10 @@ def get_staff_by_id(id):
 @jwt_required()
 def create_staff():
     try:
+        _, error_response, status = require_roles('nurse_admin')
+        if error_response:
+            return error_response, status
+
         data = request.get_json()
         
         start_time = None
@@ -295,6 +329,10 @@ def create_staff():
 @jwt_required()
 def update_staff(id):
     try:
+        _, error_response, status = require_roles('nurse_admin')
+        if error_response:
+            return error_response, status
+
         staff = Staff.query.get_or_404(id)
         data = request.get_json()
         
@@ -319,6 +357,10 @@ def update_staff(id):
 @jwt_required()
 def delete_staff(id):
     try:
+        _, error_response, status = require_roles('nurse_admin')
+        if error_response:
+            return error_response, status
+
         staff = Staff.query.get_or_404(id)
         staff.is_active = False
         db.session.commit()
@@ -332,6 +374,13 @@ def delete_staff(id):
 @jwt_required()
 def get_staff_schedule(id):
     try:
+        current_user, error_response, status = require_roles('nurse_admin', 'nurse')
+        if error_response:
+            return error_response, status
+
+        if current_user.role == 'nurse' and current_user.staff_id != id:
+            return jsonify({'error': 'Nurses can only view their own schedule'}), 403
+
         staff = Staff.query.get_or_404(id)
         
         start_date = request.args.get('start_date')
@@ -381,6 +430,10 @@ def get_area_by_id(id):
 @jwt_required()
 def create_area():
     try:
+        _, error_response, status = require_roles('nurse_admin')
+        if error_response:
+            return error_response, status
+
         data = request.get_json()
         new_area = StaffArea(
             name=data['name'],
@@ -429,6 +482,10 @@ def get_shifts():
 @jwt_required()
 def create_shift():
     try:
+        _, error_response, status = require_roles('nurse_admin')
+        if error_response:
+            return error_response, status
+
         data = request.get_json()
         
         if not all(k in data for k in ['staff_id', 'area_id', 'date', 'start_time', 'end_time']):
@@ -510,6 +567,10 @@ def get_shift_by_id(id):
 @jwt_required()
 def update_shift(id):
     try:
+        _, error_response, status = require_roles('nurse_admin')
+        if error_response:
+            return error_response, status
+
         shift = Shift.query.get_or_404(id)
         data = request.get_json()
         
@@ -544,6 +605,10 @@ def update_shift(id):
 @jwt_required()
 def delete_shift(id):
     try:
+        _, error_response, status = require_roles('nurse_admin')
+        if error_response:
+            return error_response, status
+
         shift = Shift.query.get_or_404(id)
         db.session.delete(shift)
         db.session.commit()
@@ -559,9 +624,17 @@ def delete_shift(id):
 @jwt_required()
 def get_time_off_requests():
     try:
+        current_user, error_response, status = require_roles('nurse_admin', 'nurse')
+        if error_response:
+            return error_response, status
+
         requests = TimeOffRequest.query.options(
             joinedload(TimeOffRequest.staff_member)
-        ).all()
+        )
+        if current_user.role == 'nurse':
+            requests = requests.filter(TimeOffRequest.staff_id == current_user.staff_id)
+
+        requests = requests.all()
         return jsonify([r.to_dict() for r in requests]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -569,9 +642,17 @@ def get_time_off_requests():
 @app.route('/time-off/<int:id>', methods=['GET'])
 @jwt_required()
 def get_time_off_request_by_id(id):
+    current_user, error_response, status = require_roles('nurse_admin', 'nurse')
+    if error_response:
+        return error_response, status
+
     request_obj = TimeOffRequest.query.options(
         joinedload(TimeOffRequest.staff_member)
     ).get_or_404(id)
+
+    if current_user.role == 'nurse' and request_obj.staff_id != current_user.staff_id:
+        return jsonify({'error': 'Forbidden'}), 403
+
     return jsonify(request_obj.to_dict()), 200
 
 
@@ -579,8 +660,17 @@ def get_time_off_request_by_id(id):
 @jwt_required()
 def create_time_off_request():
     try:
+        current_user, error_response, status = require_roles('nurse_admin', 'nurse')
+        if error_response:
+            return error_response, status
+
         data = request.get_json()
         
+        if current_user.role == 'nurse':
+            if not current_user.staff_id:
+                return jsonify({'error': 'Nurse account is not linked to a staff member'}), 400
+            data['staff_id'] = current_user.staff_id
+
         if 'staff_id' not in data:
             return jsonify({'error': 'staff_id is required'}), 400
         if 'start_date' not in data:
@@ -644,6 +734,10 @@ def create_time_off_request():
 @jwt_required()
 def update_time_off_request(id):
     try:
+        current_user, error_response, status = require_roles('nurse_admin')
+        if error_response:
+            return error_response, status
+
         request_obj = TimeOffRequest.query.get_or_404(id)
         data = request.get_json()
         
@@ -669,7 +763,18 @@ def update_time_off_request(id):
 @jwt_required()
 def delete_time_off_request(id):
     try:
+        current_user, error_response, status = require_roles('nurse_admin', 'nurse')
+        if error_response:
+            return error_response, status
+
         request_obj = TimeOffRequest.query.get_or_404(id)
+
+        if current_user.role == 'nurse':
+            if request_obj.staff_id != current_user.staff_id:
+                return jsonify({'error': 'Forbidden'}), 403
+            if request_obj.status != 'pending':
+                return jsonify({'error': 'Only pending requests can be deleted'}), 400
+
         db.session.delete(request_obj)
         db.session.commit()
         return jsonify({'message': 'Time-off request deleted'}), 200
@@ -711,6 +816,10 @@ def ai_generate_schedule():
     if request.method == 'OPTIONS':
         return '', 200
     try:
+        _, error_response, status = require_roles('nurse_admin')
+        if error_response:
+            return error_response, status
+
         data = request.get_json()
         week_start = datetime.strptime(data['week_start_date'], '%Y-%m-%d').date()
         fill_empty_only = data.get('fill_empty_only', False)
@@ -756,6 +865,10 @@ def apply_ai_schedule():
         return '', 200
         
     try:
+        _, error_response, status = require_roles('nurse_admin')
+        if error_response:
+            return error_response, status
+
         data = request.get_json()
         shifts_data = data['shifts']
         clear_existing = data.get('clear_existing', False)

@@ -19,7 +19,7 @@ function Navbar() {
       </div>
       <div className="nav-links">
         <Link to="/">Schedule</Link>
-        <Link to="/staff">Staff</Link>
+        {user?.role === 'nurse_admin' && <Link to="/staff">Staff</Link>}
         <Link to="/time-off">Time Off</Link>
       </div>
       <div className="nav-right">

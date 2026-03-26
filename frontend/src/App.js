@@ -8,14 +8,22 @@ import StaffList from './components/StaffList';
 import TimeOffRequests from './components/TimeOffRequests';
 import './App.css';
 
-function ProtectedRoute({ children }) {
-  const { isAuthenticated, loading } = useAuth();
+function ProtectedRoute({ children, allowedRoles }) {
+  const { isAuthenticated, loading, user } = useAuth();
   
   if (loading) {
     return <div>Loading...</div>;
   }
   
-  return isAuthenticated ? children : <Navigate to="/login" />;
+  if (!isAuthenticated) {
+    return <Navigate to="/login" />;
+  }
+
+  if (allowedRoles && !allowedRoles.includes(user?.role)) {
+    return <Navigate to="/" />;
+  }
+
+  return children;
 }
 
 function AppContent() {
@@ -31,7 +39,7 @@ function AppContent() {
         <Route
           path="/"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['nurse_admin', 'nurse']}>
               <ScheduleCalendar />
             </ProtectedRoute>
           }
@@ -40,7 +48,7 @@ function AppContent() {
         <Route
           path="/staff"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['nurse_admin']}>
               <StaffList />
             </ProtectedRoute>
           }
@@ -49,7 +57,7 @@ function AppContent() {
         <Route
           path="/time-off"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['nurse_admin', 'nurse']}>
               <TimeOffRequests />
             </ProtectedRoute>
           }
