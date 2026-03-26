@@ -596,3 +596,32 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+/* ===== Nurse Welcome Banner ===== */
+.nurse-welcome-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(135deg, #e8f5e9, #f1f8e9);
+  border-left: 4px solid #4caf50;
+  border-radius: 0 8px 8px 0;
+  padding: 12px 20px;
+  margin: 12px 16px;
+  font-size: 14px;
+  color: #2e7d32;
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.12);
+}
+
+.nurse-welcome-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.nurse-welcome-banner a {
+  color: #1b5e20;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.nurse-welcome-banner a:hover {
+  color: #2e7d32;
+}

@@ -3,9 +3,15 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import './Navbar.css';
 
+const ROLE_LABELS = {
+  nurse_admin: 'Nurse Administrator',
+  nurse: 'Nurse',
+};
+
 function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const isAdmin = user?.role === 'nurse_admin';
 
   const handleLogout = () => {
     logout();
@@ -19,12 +25,15 @@ function Navbar() {
       </div>
       <div className="nav-links">
         <Link to="/">Schedule</Link>
-        {user?.role === 'nurse_admin' && <Link to="/staff">Staff</Link>}
+        {isAdmin && <Link to="/staff">Staff</Link>}
         <Link to="/time-off">Time Off</Link>
       </div>
       <div className="nav-right">
         <span className="user-info">
-          👤 {user?.username} ({user?.role})
+          <span className={`role-badge role-badge--${user?.role}`}>
+            {ROLE_LABELS[user?.role] || user?.role}
+          </span>
+          {user?.username}
         </span>
         <button onClick={handleLogout} className="logout-button">
           Logout

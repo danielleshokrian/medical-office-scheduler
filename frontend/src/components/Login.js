@@ -7,129 +7,121 @@ function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
 
     const result = await login(username, password);
-    
+    setLoading(false);
+
     if (result.success) {
       navigate('/');
     } else {
-      setError(result.error);
+      setError(result.error || 'Invalid username or password');
     }
   };
 
-  const handleDemoLogin = async () => {
+  const handleDemoLogin = async (demoUsername, demoPassword) => {
     setError('');
-    const result = await login('admin', 'admin123');
-    
-    if (result.success) {
-      navigate('/');
-    } else {
-      setError(result.error);
-    }
-  };
-
-  const handleNurseDemoLogin = async () => {
-    setError('');
-    const result = await login('lori', 'nurse123');
+    setLoading(true);
+    const result = await login(demoUsername, demoPassword);
+    setLoading(false);
 
     if (result.success) {
       navigate('/');
     } else {
-      setError(result.error);
+      setError(result.error || 'Demo login failed');
     }
   };
 
   return (
     <div className="login-container">
-      <div className="login-box">
-        <h2>Medical Office Scheduler</h2>
-        <h3>Login</h3>
-        
-        {error && <div className="error-message">{error}</div>}
-        
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Username</label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-            />
-          </div>
-          
-          <div className="form-group">
-            <label>Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-          
-          <button type="submit" className="login-button">
-            Login
-          </button>
-          
-          <button 
-            type="button" 
-            onClick={handleDemoLogin}
-            className="demo-button"
-            style={{
-              marginTop: '15px',
-              background: 'linear-gradient(135deg, #42a5f5 0%, #1e88e5 100%)',
-              color: 'white',
-              border: 'none',
-              padding: '14px 24px',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              width: '100%',
-              fontSize: '16px',
-              fontWeight: '600',
-              transition: 'all 0.3s ease',
-              boxShadow: '0 4px 12px rgba(66, 165, 245, 0.3)'
-            }}
-            onMouseOver={(e) => {
-              e.target.style.background = 'linear-gradient(135deg, #1e88e5 0%, #1565c0 100%)';
-              e.target.style.boxShadow = '0 6px 16px rgba(66, 165, 245, 0.4)';
-              e.target.style.transform = 'translateY(-2px)';
-            }}
-            onMouseOut={(e) => {
-              e.target.style.background = 'linear-gradient(135deg, #42a5f5 0%, #1e88e5 100%)';
-              e.target.style.boxShadow = '0 4px 12px rgba(66, 165, 245, 0.3)';
-              e.target.style.transform = 'translateY(0)';
-            }}
-          >
-            Nurse Admin Demo
-          </button>
+      <div className="login-wrapper">
+        <div className="login-header">
+          <div className="login-logo">+</div>
+          <h1>Medical Office Scheduler</h1>
+          <p>Staff scheduling and time-off management</p>
+        </div>
 
-          <button
-            type="button"
-            onClick={handleNurseDemoLogin}
-            className="demo-button"
-            style={{
-              marginTop: '10px'
-            }}
-          >
-            Nurse Demo
-          </button>
-        </form>
-        
-        <p style={{ 
-          marginTop: '20px', 
-          fontSize: '14px', 
-          color: '#666',
-          textAlign: 'center' 
-        }}>
-          Use demo roles to test admin and nurse access
-        </p>
+        <div className="role-cards">
+          <div className="role-card admin-card">
+            <div className="role-card-icon">&#9881;</div>
+            <h3>Nurse Administrator</h3>
+            <ul className="role-features">
+              <li>Create &amp; edit schedules</li>
+              <li>Manage staff members</li>
+              <li>Approve or deny time-off requests</li>
+              <li>AI-assisted schedule generation</li>
+            </ul>
+            <button
+              className="demo-role-button admin-demo-button"
+              onClick={() => handleDemoLogin('admin', 'admin123')}
+              disabled={loading}
+            >
+              Demo: Admin Login
+            </button>
+          </div>
+
+          <div className="role-card nurse-card">
+            <div className="role-card-icon">&#128203;</div>
+            <h3>Nurse</h3>
+            <ul className="role-features">
+              <li>View weekly schedule</li>
+              <li>Submit time-off requests</li>
+              <li>Track request status</li>
+              <li>View your assigned shifts</li>
+            </ul>
+            <button
+              className="demo-role-button nurse-demo-button"
+              onClick={() => handleDemoLogin('lori', 'nurse123')}
+              disabled={loading}
+            >
+              Demo: Nurse Login
+            </button>
+          </div>
+        </div>
+
+        <div className="login-box">
+          <h2>Sign In</h2>
+
+          {error && <div className="error-message">{error}</div>}
+
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label htmlFor="username">Username</label>
+              <input
+                id="username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Enter your username"
+                required
+                autoFocus
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="password">Password</label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                required
+              />
+            </div>
+
+            <button type="submit" className="login-button" disabled={loading}>
+              {loading ? 'Signing in...' : 'Sign In'}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );
