@@ -500,17 +500,7 @@ const handleClearSchedule = async () => {
 
   return (
     <>
-      {!canEditSchedule && (
-        <div className="nurse-welcome-banner">
-          <span className="nurse-welcome-icon">&#128203;</span>
-          <div>
-            <strong>Welcome, {user?.username}!</strong> You are viewing the schedule in read-only mode.
-            Use <a href="/time-off">Time Off</a> to submit a time-off request.
-          </div>
-        </div>
-      )}
-
-      {viewMode === 'week' ? (
+{viewMode === 'week' ? (
         // WEEKLY VIEW
         <div className="schedule-container">
           <div className="schedule-header">
