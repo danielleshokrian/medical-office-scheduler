@@ -5,7 +5,6 @@ import { API_ENDPOINTS } from '../config';
 import './TimeOffRequests.css';
 import { useAuth } from '../AuthContext';
 
-// Return the Monday of the week containing `date`
 function getMonday(date) {
   const d = new Date(date);
   const day = d.getDay();
@@ -15,22 +14,22 @@ function getMonday(date) {
   return d;
 }
 
+function addWeeks(date, n) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n * 7);
+  return d;
+}
+
 function formatWeekLabel(mondayDate) {
   const friday = new Date(mondayDate);
   friday.setDate(friday.getDate() + 4);
   const opts = { month: 'short', day: 'numeric' };
-  return `Week of ${mondayDate.toLocaleDateString('en-US', opts)} – ${friday.toLocaleDateString('en-US', opts)}`;
+  return `${mondayDate.toLocaleDateString('en-US', opts)} – ${friday.toLocaleDateString('en-US', opts)}`;
 }
 
-function groupByWeek(dayOffRequests) {
-  const weeks = {};
-  dayOffRequests.forEach(req => {
-    const monday = getMonday(new Date(req.start_date + 'T12:00:00'));
-    const key = monday.toISOString().slice(0, 10);
-    if (!weeks[key]) weeks[key] = { monday, requests: [] };
-    weeks[key].requests.push(req);
-  });
-  return Object.values(weeks).sort((a, b) => a.monday - b.monday);
+function isSameWeek(date, monday) {
+  const d = getMonday(new Date(date + 'T12:00:00'));
+  return d.toISOString().slice(0, 10) === monday.toISOString().slice(0, 10);
 }
 
 function TimeOffRequests() {
@@ -42,19 +41,28 @@ function TimeOffRequests() {
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // PTO filters
   const [ptoFilter, setPtoFilter] = useState('all');
+
+  // Day-off week navigation
+  const [viewedWeek, setViewedWeek] = useState(() => getMonday(new Date()));
+  const [showPast, setShowPast] = useState(false);
+  const [staffFilter, setStaffFilter] = useState('all');
+
+  // Form
   const [showForm, setShowForm] = useState(false);
   const [defaultFormType, setDefaultFormType] = useState('pto');
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-
       const [requestsRes, staffRes] = await Promise.all([
         fetchWithAuth(API_ENDPOINTS.TIME_OFF),
-        isAdmin ? fetchWithAuth(API_ENDPOINTS.STAFF) : Promise.resolve({ ok: true, json: async () => [] })
+        isAdmin
+          ? fetchWithAuth(API_ENDPOINTS.STAFF)
+          : Promise.resolve({ ok: true, json: async () => [] })
       ]);
-
       if (!requestsRes.ok) throw new Error('Failed to fetch time-off requests');
       if (!staffRes.ok) throw new Error('Failed to fetch staff');
 
@@ -98,16 +106,28 @@ function TimeOffRequests() {
     }
   };
 
-  const openForm = (type) => {
-    setDefaultFormType(type);
-    setShowForm(true);
-  };
+  const openForm = (type) => { setDefaultFormType(type); setShowForm(true); };
 
   const statusBadgeClass = (status) =>
     ({ pending: 'status-pending', approved: 'status-approved', denied: 'status-denied' }[status] || '');
 
+  // ── Day-off derived state ──────────────────────────────
+  const currentWeekMonday = getMonday(new Date());
+  const isPastWeek = viewedWeek < currentWeekMonday;
+
+  // All day-off requests filtered by staff
+  const filteredDayOffs = dayOffRequests.filter(r =>
+    staffFilter === 'all' || String(r.staff_id) === staffFilter
+  );
+
+  // Requests visible in the currently viewed week
+  const weekRequests = filteredDayOffs.filter(r => isSameWeek(r.start_date, viewedWeek));
+
+  // Can we navigate backward?
+  const canGoPrev = showPast || viewedWeek > currentWeekMonday;
+
+  // ── PTO derived state ─────────────────────────────────
   const filteredPto = ptoRequests.filter(r => ptoFilter === 'all' || r.status === ptoFilter);
-  const weeklyDayOffs = groupByWeek(dayOffRequests);
 
   if (loading) return <div className="loading">Loading...</div>;
   if (error) return <div className="error">Error: {error}</div>;
@@ -129,50 +149,120 @@ function TimeOffRequests() {
           </button>
         </div>
 
-        {weeklyDayOffs.length === 0 ? (
-          <div className="no-requests">No scheduled days off on record.</div>
-        ) : (
-          <div className="weekly-dayoff-grid">
-            {weeklyDayOffs.map(({ monday, requests }) => (
-              <div key={monday.toISOString()} className="week-block">
-                <div className="week-block-header">{formatWeekLabel(monday)}</div>
-                {requests.map(req => (
-                  <div key={req.id} className="dayoff-row">
-                    <div className="dayoff-info">
-                      {isAdmin && <span className="dayoff-staff">{req.staff_name}</span>}
-                      <span className="dayoff-date">
-                        {new Date(req.start_date + 'T12:00:00').toLocaleDateString('en-US', {
-                          weekday: 'long', month: 'short', day: 'numeric'
-                        })}
-                      </span>
-                      {req.reason && <span className="dayoff-reason">{req.reason}</span>}
-                    </div>
-                    <div className="dayoff-actions">
-                      <span className={`status-badge ${statusBadgeClass(req.status)}`}>
-                        {req.status}
-                      </span>
-                      {isAdmin && req.status === 'pending' && (
-                        <>
-                          <button className="approve-button" onClick={() => handleStatusUpdate(req.id, 'approved')}>
-                            ✓ Approve
-                          </button>
-                          <button className="deny-button" onClick={() => handleStatusUpdate(req.id, 'denied')}>
-                            ✗ Deny
-                          </button>
-                        </>
-                      )}
-                      <button
-                        className="delete-button"
-                        onClick={() => handleDelete(req.id)}
-                        disabled={!isAdmin && req.status !== 'pending'}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
+        {/* Controls row */}
+        <div className="dayoff-controls">
+          {/* Staff filter (admin only) */}
+          {isAdmin && (
+            <select
+              className="dayoff-staff-filter"
+              value={staffFilter}
+              onChange={e => setStaffFilter(e.target.value)}
+            >
+              <option value="all">All staff</option>
+              {staff
+                .filter(s => s.is_active)
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map(s => (
+                  <option key={s.id} value={String(s.id)}>{s.name}</option>
                 ))}
-              </div>
-            ))}
+            </select>
+          )}
+
+          {/* Week navigator */}
+          <div className="week-nav">
+            <button
+              className="week-nav-btn"
+              onClick={() => setViewedWeek(w => addWeeks(w, -1))}
+              disabled={!canGoPrev}
+              title="Previous week"
+            >
+              &#8249;
+            </button>
+
+            <span className="week-nav-label">
+              {isPastWeek && <span className="past-tag">Past</span>}
+              {formatWeekLabel(viewedWeek)}
+              <span className="week-count">
+                {weekRequests.length} request{weekRequests.length !== 1 ? 's' : ''}
+              </span>
+            </span>
+
+            <button
+              className="week-nav-btn"
+              onClick={() => setViewedWeek(w => addWeeks(w, 1))}
+              title="Next week"
+            >
+              &#8250;
+            </button>
+
+            {viewedWeek.toISOString().slice(0,10) !== currentWeekMonday.toISOString().slice(0,10) && (
+              <button
+                className="week-today-btn"
+                onClick={() => setViewedWeek(currentWeekMonday)}
+              >
+                Today
+              </button>
+            )}
+          </div>
+
+          {/* Past toggle */}
+          <label className="past-toggle">
+            <input
+              type="checkbox"
+              checked={showPast}
+              onChange={e => {
+                setShowPast(e.target.checked);
+                if (!e.target.checked && viewedWeek < currentWeekMonday) {
+                  setViewedWeek(currentWeekMonday);
+                }
+              }}
+            />
+            Show past weeks
+          </label>
+        </div>
+
+        {/* Week requests */}
+        {weekRequests.length === 0 ? (
+          <div className="no-requests">No scheduled days off for this week.</div>
+        ) : (
+          <div className="week-block">
+            {weekRequests
+              .sort((a, b) => new Date(a.start_date) - new Date(b.start_date))
+              .map(req => (
+                <div key={req.id} className="dayoff-row">
+                  <div className="dayoff-info">
+                    {isAdmin && <span className="dayoff-staff">{req.staff_name}</span>}
+                    <span className="dayoff-date">
+                      {new Date(req.start_date + 'T12:00:00').toLocaleDateString('en-US', {
+                        weekday: 'long', month: 'short', day: 'numeric'
+                      })}
+                    </span>
+                    {req.reason && <span className="dayoff-reason">{req.reason}</span>}
+                  </div>
+                  <div className="dayoff-actions">
+                    <span className={`status-badge ${statusBadgeClass(req.status)}`}>
+                      {req.status}
+                    </span>
+                    {isAdmin && req.status === 'pending' && (
+                      <>
+                        <button className="approve-button" onClick={() => handleStatusUpdate(req.id, 'approved')}>
+                          Approve
+                        </button>
+                        <button className="deny-button" onClick={() => handleStatusUpdate(req.id, 'denied')}>
+                          Deny
+                        </button>
+                      </>
+                    )}
+                    <button
+                      className="delete-button"
+                      onClick={() => handleDelete(req.id)}
+                      disabled={!isAdmin && req.status !== 'pending'}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
           </div>
         )}
       </div>
@@ -227,9 +317,8 @@ function TimeOffRequests() {
             <tbody>
               {filteredPto.map(request => {
                 const start = new Date(request.start_date + 'T12:00:00');
-                const end = new Date(request.end_date + 'T12:00:00');
-                const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
-
+                const end   = new Date(request.end_date   + 'T12:00:00');
+                const days  = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
                 return (
                   <tr key={request.id}>
                     {isAdmin && <td><strong>{request.staff_name}</strong></td>}
@@ -247,10 +336,10 @@ function TimeOffRequests() {
                       {isAdmin && request.status === 'pending' && (
                         <>
                           <button className="approve-button" onClick={() => handleStatusUpdate(request.id, 'approved')}>
-                            ✓ Approve
+                            Approve
                           </button>
                           <button className="deny-button" onClick={() => handleStatusUpdate(request.id, 'denied')}>
-                            ✗ Deny
+                            Deny
                           </button>
                         </>
                       )}

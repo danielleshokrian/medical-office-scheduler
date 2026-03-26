@@ -175,6 +175,120 @@
 .delete-button:hover:not(:disabled) { background: var(--c-gray-200); color: var(--c-gray-700); }
 .delete-button:disabled { opacity: 0.35; cursor: not-allowed; }
 
+/* ── Day-off controls row ── */
+.dayoff-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.dayoff-staff-filter {
+  padding: 6px 10px;
+  border: 1px solid var(--c-gray-200);
+  border-radius: var(--r);
+  font-size: 13px;
+  color: var(--c-gray-700);
+  background: var(--c-white);
+  cursor: pointer;
+  min-width: 150px;
+}
+.dayoff-staff-filter:focus {
+  outline: none;
+  border-color: var(--c-primary);
+  box-shadow: 0 0 0 3px var(--c-primary-bg);
+}
+
+/* Week navigator */
+.week-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--c-gray-50);
+  border: 1px solid var(--c-gray-200);
+  border-radius: var(--r);
+  padding: 4px 6px;
+}
+
+.week-nav-btn {
+  background: none;
+  border: none;
+  color: var(--c-gray-500);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  transition: background 0.15s, color 0.15s;
+}
+.week-nav-btn:hover:not(:disabled) {
+  background: var(--c-gray-200);
+  color: var(--c-gray-900);
+}
+.week-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.week-nav-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--c-gray-700);
+  white-space: nowrap;
+  padding: 0 4px;
+}
+
+.past-tag {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--c-warning);
+  background: var(--c-warning-bg);
+  border: 1px solid var(--c-warning-bd);
+  padding: 1px 6px;
+  border-radius: 99px;
+}
+
+.week-count {
+  font-size: 12px;
+  color: var(--c-gray-400);
+  font-weight: 400;
+}
+
+.week-today-btn {
+  background: var(--c-primary-bg);
+  color: var(--c-primary);
+  border: 1px solid var(--c-primary-bd);
+  border-radius: var(--r-sm);
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.week-today-btn:hover { background: var(--c-primary); color: white; }
+
+/* Past toggle */
+.past-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--c-gray-500);
+  cursor: pointer;
+  user-select: none;
+  margin-left: auto;
+}
+.past-toggle input[type="checkbox"] {
+  accent-color: var(--c-primary);
+  cursor: pointer;
+}
+
 /* ── Weekly day-off grid ── */
 .weekly-dayoff-grid {
   display: flex;
