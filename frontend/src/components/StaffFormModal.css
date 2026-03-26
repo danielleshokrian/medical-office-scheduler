@@ -1,5 +1,5 @@
 .staff-modal {
-  max-width: 600px;
+  max-width: 580px;
 }
 
 .checkbox-group {
@@ -13,23 +13,26 @@
   gap: 8px;
   cursor: pointer;
   margin: 0;
+  font-size: 13px;
+  color: var(--c-gray-700);
 }
 
 .checkbox-group input[type="checkbox"] {
   width: auto;
   cursor: pointer;
+  accent-color: var(--c-primary);
 }
 
 small {
   display: block;
-  color: #7f8c8d;
+  color: var(--c-gray-400);
   font-size: 12px;
-  margin-top: 5px;
+  margin-top: 4px;
 }
 
 .days-checkbox-group {
   display: flex;
-  gap: 15px;
+  gap: 10px;
   flex-wrap: wrap;
   margin-top: 10px;
 }
@@ -37,35 +40,39 @@ small {
 .day-checkbox {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   cursor: pointer;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  transition: all 0.2s;
+  padding: 7px 12px;
+  border: 1px solid var(--c-gray-200);
+  border-radius: var(--r);
+  font-size: 13px;
+  color: var(--c-gray-700);
+  transition: all 0.15s;
+  user-select: none;
 }
 
 .day-checkbox:hover {
-  background: #f8f9fa;
-  border-color: #3498db;
+  border-color: var(--c-primary-bd);
+  background: var(--c-primary-bg);
 }
 
 .day-checkbox input[type="checkbox"] {
   width: auto;
   cursor: pointer;
+  accent-color: var(--c-primary);
 }
 
-.day-checkbox input[type="checkbox"]:checked + span,
 .day-checkbox:has(input:checked) {
-  background: #e3f2fd;
-  border-color: #3498db;
+  background: var(--c-primary-bg);
+  border-color: var(--c-primary);
+  color: var(--c-primary);
   font-weight: 600;
 }
 
 .areas-checkbox-group {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
   margin-top: 10px;
 }
 
@@ -74,32 +81,42 @@ small {
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  padding: 10px 12px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  transition: all 0.2s;
-  background: white;
+  padding: 9px 12px;
+  border: 1px solid var(--c-gray-200);
+  border-radius: var(--r);
+  font-size: 13px;
+  color: var(--c-gray-700);
+  transition: all 0.15s;
+  background: var(--c-white);
+  user-select: none;
 }
 
 .area-checkbox:hover {
-  background: #f8f9fa;
-  border-color: #3498db;
+  border-color: var(--c-primary-bd);
+  background: var(--c-primary-bg);
 }
 
-.area-checkbox input[type="checkbox"]:checked ~ *,
+.area-checkbox input[type="checkbox"] {
+  width: auto;
+  cursor: pointer;
+  accent-color: var(--c-primary);
+}
+
 .area-checkbox:has(input:checked) {
-  background: #e3f2fd;
-  border-color: #3498db;
+  background: var(--c-primary-bg);
+  border-color: var(--c-primary);
+  color: var(--c-primary);
   font-weight: 600;
 }
 
 .area-checkbox.all-areas {
   grid-column: 1 / -1;
-  background: #f8f9fa;
-  border: 2px solid #95a5a6;
+  background: var(--c-gray-50);
+  border: 1px solid var(--c-gray-300);
 }
 
 .area-checkbox.all-areas:has(input:checked) {
-  background: #d5f4e6;
-  border-color: #2ecc71;
+  background: var(--c-success-bg);
+  border-color: var(--c-success-bd);
+  color: var(--c-success);
 }
