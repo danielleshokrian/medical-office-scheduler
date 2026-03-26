@@ -33,4 +33,4 @@ backups/
 # OS files
 .DS_Store
 *.log
-logs/
+logs/medical-office-scheduler/
