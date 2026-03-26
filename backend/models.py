@@ -140,18 +140,26 @@ class TimeOffRequest(db.Model):
     end_date = db.Column(db.Date, nullable=False, index=True)
     reason = db.Column(db.String(200), nullable=True)
     status = db.Column(db.String(20), default='pending', index=True)  # 'pending', 'approved', 'denied'
+    request_type = db.Column(db.String(20), default='pto')  # 'pto' or 'day_off'
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    
+
+
     staff_member = db.relationship('Staff', back_populates='time_off_requests')
-    
+
     @validates('status')
     def validate_status(self, key, value):
         valid_statuses = ['pending', 'approved', 'denied']
         if value not in valid_statuses:
             raise ValueError(f"Status must be one of: {', '.join(valid_statuses)}")
         return value
-    
+
+    @validates('request_type')
+    def validate_request_type(self, key, value):
+        valid_types = ['pto', 'day_off']
+        if value not in valid_types:
+            raise ValueError(f"request_type must be one of: {', '.join(valid_types)}")
+        return value
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -161,6 +169,7 @@ class TimeOffRequest(db.Model):
             'end_date': self.end_date.strftime('%Y-%m-%d'),
             'reason': self.reason,
             'status': self.status,
+            'request_type': self.request_type,
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M')
         }
 

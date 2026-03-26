@@ -700,27 +700,42 @@ def create_time_off_request():
         if duration > 30:
             return jsonify({'error': 'Time-off requests cannot exceed 30 days'}), 400
         
+        request_type = data.get('request_type', 'pto')
+        if request_type not in ('pto', 'day_off'):
+            return jsonify({'error': 'request_type must be pto or day_off'}), 400
+
+        # Scheduled day off must be a single day
+        if request_type == 'day_off' and start_date != end_date:
+            return jsonify({'error': 'Scheduled day off must be a single day'}), 400
+
+        # Check for overlapping requests of the same type
         overlapping = TimeOffRequest.query.filter(
             TimeOffRequest.staff_id == data['staff_id'],
+            TimeOffRequest.request_type == request_type,
             TimeOffRequest.status.in_(['pending', 'approved']),
             TimeOffRequest.start_date <= end_date,
             TimeOffRequest.end_date >= start_date
         ).first()
-        
+
         if overlapping:
-            return jsonify({'error': 'Overlapping time-off request already exists'}), 400
-        
+            label = 'scheduled day off' if request_type == 'day_off' else 'time-off request'
+            return jsonify({'error': f'An overlapping {label} already exists for that date'}), 400
+
+        # Scheduled day offs are auto-approved — no admin action needed
+        initial_status = 'approved' if request_type == 'day_off' else 'pending'
+
         new_request = TimeOffRequest(
             staff_id=data['staff_id'],
             start_date=start_date,
             end_date=end_date,
             reason=data.get('reason', ''),
-            status='pending'
+            status=initial_status,
+            request_type=request_type
         )
-        
+
         db.session.add(new_request)
         db.session.commit()
-        
+
         return jsonify(new_request.to_dict()), 201
         
     except KeyError as e:
