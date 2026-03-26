@@ -2,59 +2,90 @@
   padding: 20px;
   max-width: 1400px;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
 }
 
-.time-off-header {
+/* ===== Section wrapper ===== */
+.tor-section {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
+  padding: 28px;
+}
+
+.tor-section-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 30px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  gap: 16px;
 }
 
-.time-off-header h1 {
-  margin: 0;
+.tor-section-header h2 {
+  margin: 0 0 4px 0;
   color: #2c3e50;
+  font-size: 20px;
 }
 
+.tor-section-subtitle {
+  margin: 0;
+  font-size: 13.5px;
+  color: #7f8c8d;
+}
+
+/* ===== Buttons ===== */
 .add-request-button {
-  padding: 12px 24px;
+  padding: 10px 20px;
   background: #3498db;
   color: white;
   border: none;
-  border-radius: 5px;
-  font-size: 16px;
+  border-radius: 6px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .add-request-button:hover {
   background: #2980b9;
 }
 
+.day-off-button {
+  background: #27ae60;
+}
+
+.day-off-button:hover {
+  background: #219a52;
+}
+
+/* ===== Filters ===== */
 .time-off-filters {
-  margin-bottom: 30px;
+  margin-bottom: 20px;
 }
 
 .filter-buttons {
   display: flex;
-  gap: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .filter-buttons button {
-  padding: 10px 20px;
+  padding: 8px 16px;
   border: 2px solid #ddd;
   background: white;
   border-radius: 5px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   transition: all 0.2s;
 }
 
 .filter-buttons button:hover {
   border-color: #3498db;
-  background: #f8f9fa;
 }
 
 .filter-buttons button.active {
@@ -63,13 +94,7 @@
   border-color: #3498db;
 }
 
-.requests-list {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  overflow: hidden;
-}
-
+/* ===== PTO Table ===== */
 .requests-table {
   width: 100%;
   border-collapse: collapse;
@@ -81,10 +106,10 @@
 }
 
 .requests-table th {
-  padding: 15px;
+  padding: 12px 15px;
   text-align: left;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .requests-table tbody tr {
@@ -97,37 +122,24 @@
 }
 
 .requests-table td {
-  padding: 15px;
-  font-size: 14px;
+  padding: 12px 15px;
+  font-size: 13.5px;
 }
 
-.staff-name-cell strong {
-  color: #2c3e50;
-}
-
+/* ===== Status badges ===== */
 .status-badge {
-  padding: 4px 12px;
+  padding: 3px 10px;
   border-radius: 12px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
 }
 
-.status-pending {
-  background: #fff3cd;
-  color: #856404;
-}
+.status-pending  { background: #fff3cd; color: #856404; }
+.status-approved { background: #d4edda; color: #155724; }
+.status-denied   { background: #f8d7da; color: #721c24; }
 
-.status-approved {
-  background: #d4edda;
-  color: #155724;
-}
-
-.status-denied {
-  background: #f8d7da;
-  color: #721c24;
-}
-
+/* ===== Action buttons ===== */
 .actions-cell {
   display: flex;
   gap: 5px;
@@ -137,7 +149,7 @@
 .approve-button,
 .deny-button,
 .delete-button {
-  padding: 6px 12px;
+  padding: 5px 10px;
   border: none;
   border-radius: 4px;
   font-size: 12px;
@@ -146,38 +158,88 @@
   transition: all 0.2s;
 }
 
-.approve-button {
-  background: #2ecc71;
-  color: white;
+.approve-button { background: #2ecc71; color: white; }
+.approve-button:hover { background: #27ae60; }
+
+.deny-button { background: #e74c3c; color: white; }
+.deny-button:hover { background: #c0392b; }
+
+.delete-button { background: #95a5a6; color: white; }
+.delete-button:hover { background: #7f8c8d; }
+.delete-button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ===== Weekly day-off grid ===== */
+.weekly-dayoff-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.approve-button:hover {
-  background: #27ae60;
+.week-block {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
-.deny-button {
-  background: #e74c3c;
-  color: white;
+.week-block-header {
+  background: #f0f4f8;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #2c3e50;
+  border-bottom: 1px solid #e0e0e0;
 }
 
-.deny-button:hover {
-  background: #c0392b;
+.dayoff-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid #f5f5f5;
+  gap: 12px;
 }
 
-.delete-button {
-  background: #95a5a6;
-  color: white;
+.dayoff-row:last-child {
+  border-bottom: none;
 }
 
-.delete-button:hover {
-  background: #7f8c8d;
+.dayoff-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
+.dayoff-staff {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 14px;
+}
+
+.dayoff-date {
+  color: #34495e;
+  font-size: 13.5px;
+}
+
+.dayoff-reason {
+  color: #7f8c8d;
+  font-size: 13px;
+  font-style: italic;
+}
+
+.dayoff-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ===== Misc ===== */
 .no-requests {
-  padding: 60px 20px;
+  padding: 40px 20px;
   text-align: center;
   color: #95a5a6;
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .loading,
@@ -187,6 +249,4 @@
   font-size: 18px;
 }
 
-.error {
-  color: #e74c3c;
-}
+.error { color: #e74c3c; }
