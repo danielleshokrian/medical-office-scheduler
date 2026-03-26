@@ -34,3 +34,4 @@ backups/
 .DS_Store
 *.log
 logs/medical-office-scheduler/
+medical-office-scheduler/
