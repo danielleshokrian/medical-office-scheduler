@@ -1,5 +1,5 @@
 .staff-list-container {
-  padding: 20px;
+  padding: 24px;
   max-width: 1400px;
   margin: 0 auto;
 }
@@ -8,212 +8,209 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30px;
+  margin-bottom: 24px;
 }
 
 .staff-header h1 {
   margin: 0;
-  color: #2c3e50;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--c-gray-900);
 }
 
 .add-staff-button {
-  padding: 12px 24px;
-  background: #2ecc71;
+  padding: 8px 18px;
+  background: var(--c-success);
   color: white;
   border: none;
-  border-radius: 5px;
-  font-size: 16px;
+  border-radius: var(--r);
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.15s;
 }
-
-.add-staff-button:hover {
-  background: #27ae60;
-}
+.add-staff-button:hover { background: var(--c-success-dk); }
 
 .staff-filters {
   display: flex;
-  gap: 15px;
+  gap: 12px;
   align-items: center;
-  margin-bottom: 30px;
+  margin-bottom: 24px;
   flex-wrap: wrap;
 }
 
 .search-input {
   flex: 1;
-  min-width: 250px;
-  padding: 10px 15px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
+  min-width: 220px;
+  padding: 8px 12px;
+  border: 1px solid var(--c-gray-200);
+  border-radius: var(--r);
   font-size: 14px;
+  background: var(--c-surface);
+  transition: border-color 0.15s;
+}
+.search-input:focus {
+  outline: none;
+  border-color: var(--c-primary);
+  box-shadow: 0 0 0 3px var(--c-primary-bg);
 }
 
 .role-filter {
-  padding: 10px 15px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
+  padding: 8px 12px;
+  border: 1px solid var(--c-gray-200);
+  border-radius: var(--r);
   font-size: 14px;
+  background: var(--c-surface);
   cursor: pointer;
+  color: var(--c-gray-700);
 }
 
 .staff-count {
-  color: #7f8c8d;
-  font-size: 14px;
+  color: var(--c-gray-400);
+  font-size: 13px;
 }
 
 .staff-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
 }
 
 .staff-card {
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-gray-200);
+  border-radius: var(--r-lg);
   padding: 20px;
   position: relative;
-  transition: box-shadow 0.2s;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.15s, border-color 0.15s;
 }
-
 .staff-card:hover {
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  box-shadow: var(--shadow-md);
+  border-color: var(--c-gray-300);
 }
-
 .staff-card.inactive {
-  opacity: 0.6;
-  background: #f8f9fa;
+  opacity: 0.55;
+  background: var(--c-gray-50);
 }
 
 .staff-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid #ecf0f1;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--c-gray-100);
 }
-
 .staff-card-header h3 {
   margin: 0;
-  color: #2c3e50;
-  font-size: 18px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--c-gray-900);
 }
 
 .role-badge {
-  padding: 4px 12px;
-  border-radius: 12px;
+  padding: 3px 10px;
+  border-radius: 99px;
   color: white;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.2px;
 }
 
-.staff-details {
-  margin-bottom: 15px;
-}
+.staff-details { margin-bottom: 14px; }
 
 .detail-row {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
-
 .detail-label {
-  color: #7f8c8d;
-  font-size: 14px;
+  color: var(--c-gray-400);
+  font-size: 13px;
 }
-
 .detail-value {
-  color: #2c3e50;
+  color: var(--c-gray-700);
   font-weight: 500;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .per-diem-badge {
-  background: #f39c12;
-  color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
+  background: var(--c-warning-bg);
+  color: var(--c-warning);
+  border: 1px solid var(--c-warning-bd);
+  padding: 3px 8px;
+  border-radius: var(--r-sm);
   font-size: 11px;
   font-weight: 600;
   display: inline-block;
-  margin-top: 5px;
+  margin-top: 4px;
 }
 
 .staff-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
 }
 
 .edit-button,
 .deactivate-button,
 .activate-button {
   flex: 1;
-  padding: 8px 16px;
+  padding: 7px 14px;
   border: none;
-  border-radius: 5px;
-  font-size: 14px;
+  border-radius: var(--r);
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.15s;
 }
 
 .edit-button {
-  background: #3498db;
-  color: white;
+  background: var(--c-primary-bg);
+  color: var(--c-primary);
+  border: 1px solid var(--c-primary-bd);
 }
-
-.edit-button:hover {
-  background: #2980b9;
-}
+.edit-button:hover { background: var(--c-primary); color: white; }
 
 .deactivate-button {
-  background: #e74c3c;
-  color: white;
+  background: var(--c-danger-bg);
+  color: var(--c-danger);
+  border: 1px solid #fecaca;
 }
-
-.deactivate-button:hover {
-  background: #c0392b;
-}
+.deactivate-button:hover { background: var(--c-danger); color: white; }
 
 .activate-button {
-  background: #2ecc71;
-  color: white;
+  background: var(--c-success-bg);
+  color: var(--c-success);
+  border: 1px solid var(--c-success-bd);
 }
-
-.activate-button:hover {
-  background: #27ae60;
-}
+.activate-button:hover { background: var(--c-success); color: white; }
 
 .inactive-overlay {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: rgba(0,0,0,0.8);
+  background: rgba(15,23,42,0.75);
   color: white;
-  padding: 10px 20px;
-  border-radius: 5px;
-  font-weight: 700;
-  font-size: 18px;
+  padding: 8px 16px;
+  border-radius: var(--r);
+  font-weight: 600;
+  font-size: 13px;
   pointer-events: none;
 }
 
 .no-results {
   text-align: center;
   padding: 60px 20px;
-  color: #95a5a6;
-  font-size: 16px;
+  color: var(--c-gray-400);
+  font-size: 15px;
 }
 
-.loading,
-.error {
+.loading, .error {
   text-align: center;
   padding: 40px;
-  font-size: 18px;
+  font-size: 16px;
+  color: var(--c-gray-500);
 }
-
-.error {
-  color: #e74c3c;
-}
+.error { color: var(--c-danger); }

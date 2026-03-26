@@ -43,14 +43,22 @@ function Login() {
     <div className="login-container">
       <div className="login-wrapper">
         <div className="login-header">
-          <div className="login-logo">+</div>
+          <div className="login-logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+        </div>
           <h1>Medical Office Scheduler</h1>
           <p>Staff scheduling and time-off management</p>
         </div>
 
         <div className="role-cards">
           <div className="role-card admin-card">
-            <div className="role-card-icon">&#9881;</div>
+            <div className="role-card-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </div>
             <h3>Nurse Administrator</h3>
             <ul className="role-features">
               <li>Create &amp; edit schedules</li>
@@ -68,7 +76,12 @@ function Login() {
           </div>
 
           <div className="role-card nurse-card">
-            <div className="role-card-icon">&#128203;</div>
+            <div className="role-card-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+            </div>
             <h3>Nurse</h3>
             <ul className="role-features">
               <li>View weekly schedule</li>

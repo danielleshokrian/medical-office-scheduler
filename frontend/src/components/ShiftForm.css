@@ -1,156 +1,163 @@
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  inset: 0;
+  background: rgba(15,23,42,0.5);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1000;
+  backdrop-filter: blur(2px);
 }
 
 .modal-content {
-  background: white;
-  border-radius: 8px;
+  background: var(--c-surface);
+  border-radius: var(--r-lg);
   width: 90%;
-  max-width: 600px;
+  max-width: 560px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--c-gray-200);
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #ddd;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--c-gray-200);
 }
 
 .modal-header h2 {
   margin: 0;
-  color: #2c3e50;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--c-gray-900);
 }
 
 .close-button {
   background: none;
   border: none;
-  font-size: 28px;
-  color: #95a5a6;
-  cursor: pointer;
-  padding: 0;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.2s;
+  border-radius: var(--r-sm);
+  color: var(--c-gray-400);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  padding: 0;
+  transition: background 0.15s, color 0.15s;
 }
 
 .close-button:hover {
-  color: #2c3e50;
+  background: var(--c-gray-100);
+  color: var(--c-gray-700);
 }
 
 form {
-  padding: 20px;
+  padding: 20px 24px;
 }
 
 .error-message {
-  background: #fee;
-  color: #c00;
-  padding: 10px;
-  border-radius: 5px;
-  margin-bottom: 15px;
-  border: 1px solid #fcc;
+  background: var(--c-danger-bg);
+  color: var(--c-danger);
+  padding: 10px 14px;
+  border-radius: var(--r);
+  margin-bottom: 16px;
+  border-left: 3px solid var(--c-danger);
+  font-size: 13px;
 }
 
 .form-group {
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 5px;
-  font-weight: 600;
-  color: #2c3e50;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--c-gray-700);
 }
 
 .form-group input,
 .form-group select {
   width: 100%;
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
+  padding: 9px 12px;
+  border: 1px solid var(--c-gray-200);
+  border-radius: var(--r);
   font-size: 14px;
-  transition: border-color 0.2s;
+  color: var(--c-gray-900);
+  background: var(--c-gray-50);
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
-  border-color: #3498db;
+  border-color: var(--c-primary);
+  background: var(--c-white);
+  box-shadow: 0 0 0 3px var(--c-primary-bg);
 }
 
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 15px;
+  gap: 14px;
 }
 
 .form-actions {
   display: flex;
   justify-content: space-between;
-  margin-top: 30px;
-  padding-top: 20px;
-  border-top: 1px solid #ddd;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--c-gray-200);
 }
 
 .right-buttons {
   display: flex;
-  gap: 10px;
+  gap: 8px;
 }
 
 .submit-button,
 .cancel-button,
 .delete-button {
-  padding: 10px 20px;
+  padding: 8px 18px;
   border: none;
-  border-radius: 5px;
-  font-size: 14px;
+  border-radius: var(--r);
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.15s;
 }
 
 .submit-button {
-  background: #3498db;
+  background: var(--c-primary);
   color: white;
 }
-
-.submit-button:hover:not(:disabled) {
-  background: #2980b9;
-}
+.submit-button:hover:not(:disabled) { background: var(--c-primary-dk); }
 
 .cancel-button {
-  background: #95a5a6;
-  color: white;
+  background: var(--c-gray-100);
+  color: var(--c-gray-700);
+  border: 1px solid var(--c-gray-200);
 }
-
-.cancel-button:hover:not(:disabled) {
-  background: #7f8c8d;
-}
+.cancel-button:hover:not(:disabled) { background: var(--c-gray-200); }
 
 .delete-button {
-  background: #e74c3c;
-  color: white;
+  background: var(--c-danger-bg);
+  color: var(--c-danger);
+  border: 1px solid #fecaca;
 }
-
 .delete-button:hover:not(:disabled) {
-  background: #c0392b;
+  background: var(--c-danger);
+  color: white;
 }
 
 button:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }

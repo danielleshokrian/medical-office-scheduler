@@ -1,72 +1,80 @@
 .time-off-modal {
-  max-width: 600px;
+  max-width: 520px;
 }
 
 textarea {
   width: 100%;
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
+  padding: 9px 12px;
+  border: 1px solid var(--c-gray-200);
+  border-radius: var(--r);
   font-size: 14px;
   font-family: inherit;
+  color: var(--c-gray-900);
+  background: var(--c-gray-50);
   resize: vertical;
-  transition: border-color 0.2s;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 textarea:focus {
   outline: none;
-  border-color: #3498db;
+  border-color: var(--c-primary);
+  background: var(--c-white);
+  box-shadow: 0 0 0 3px var(--c-primary-bg);
 }
 
-/* ===== Request type toggle ===== */
+/* ── Request type toggle ── */
 .request-type-toggle {
   display: flex;
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
-  overflow: hidden;
+  background: var(--c-gray-100);
+  border-radius: var(--r);
+  padding: 3px;
+  gap: 3px;
   margin-bottom: 16px;
 }
 
 .type-btn {
   flex: 1;
-  padding: 10px;
+  padding: 8px;
   border: none;
-  background: #f5f5f5;
-  color: #666;
-  font-size: 14px;
+  background: transparent;
+  color: var(--c-gray-500);
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  border-radius: 6px;
+  transition: all 0.15s;
 }
-
-.type-btn:hover {
-  background: #ececec;
+.type-btn:hover:not(.type-btn--active-pto):not(.type-btn--active-dayoff) {
+  color: var(--c-gray-700);
+  background: rgba(255,255,255,0.5);
 }
 
 .type-btn--active-pto {
-  background: #3498db;
+  background: var(--c-primary);
   color: white;
+  box-shadow: var(--shadow-sm);
 }
 
 .type-btn--active-dayoff {
-  background: #27ae60;
+  background: var(--c-success);
   color: white;
+  box-shadow: var(--shadow-sm);
 }
 
 .type-description {
-  margin: 0 0 16px 0;
-  padding: 10px 14px;
-  background: #f0faf4;
-  border-left: 3px solid #27ae60;
-  border-radius: 0 6px 6px 0;
-  font-size: 13px;
-  color: #2e7d32;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  background: var(--c-success-bg);
+  border-left: 3px solid var(--c-success);
+  border-radius: 0 var(--r) var(--r) 0;
+  font-size: 12.5px;
+  color: var(--c-success-dk);
+  line-height: 1.5;
 }
 
 .submit-dayoff {
-  background: #27ae60 !important;
+  background: var(--c-success) !important;
 }
-
 .submit-dayoff:hover:not(:disabled) {
-  background: #219a52 !important;
+  background: var(--c-success-dk) !important;
 }

@@ -547,7 +547,7 @@ const handleClearSchedule = async () => {
                     className="ai-generate-button"
                     disabled={aiLoading || previewMode}
                   >
-                    🔄 Generate Full Schedule
+                    Generate Full Schedule
                   </button>
 
                   <button 
@@ -644,7 +644,7 @@ const handleClearSchedule = async () => {
                       ))}
                       {coverageStatus.status === 'understaffed' && (
                         <div className="coverage-warning">
-                          ⚠️ {coverageStatus.warnings[0]}
+                          ! {coverageStatus.warnings[0]}
                           </div>
                       )}
                     </>
