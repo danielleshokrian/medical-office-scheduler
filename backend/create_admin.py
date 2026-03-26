@@ -10,7 +10,7 @@ with app.app_context():
         admin = User(
             username='admin',
             email='admin@example.com',
-            role='admin'
+            role='nurse_admin'
         )
         admin.set_password('admin123')  
         

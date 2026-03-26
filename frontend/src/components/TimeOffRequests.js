@@ -3,8 +3,11 @@ import TimeOffForm from './TimeOffForm';
 import { fetchWithAuth } from '../api.js';
 import { API_ENDPOINTS } from '../config';
 import './TimeOffRequests.css';
+import { useAuth } from '../AuthContext';
 
 function TimeOffRequests() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'nurse_admin';
   const [requests, setRequests] = useState([]);
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,10 +23,10 @@ function TimeOffRequests() {
     try {
       setLoading(true);
       
-      const [requestsResponse, staffResponse] = await Promise.all([
-        fetchWithAuth(API_ENDPOINTS.TIME_OFF),
-        fetchWithAuth(API_ENDPOINTS.STAFF)
-      ]);
+      const requestsResponse = await fetchWithAuth(API_ENDPOINTS.TIME_OFF);
+      const staffResponse = isAdmin
+        ? await fetchWithAuth(API_ENDPOINTS.STAFF)
+        : { ok: true, json: async () => [] };
 
       if (!requestsResponse.ok) throw new Error('Failed to fetch time-off requests');
       if (!staffResponse.ok) throw new Error('Failed to fetch staff');
@@ -141,7 +144,7 @@ function TimeOffRequests() {
           <table className="requests-table">
             <thead>
               <tr>
-                <th>Staff Member</th>
+                {isAdmin && <th>Staff Member</th>}
                 <th>Start Date</th>
                 <th>End Date</th>
                 <th>Days</th>
@@ -159,9 +162,11 @@ function TimeOffRequests() {
                 
                 return (
                   <tr key={request.id}>
-                    <td className="staff-name-cell">
-                      <strong>{request.staff_name}</strong>
-                    </td>
+                    {isAdmin && (
+                      <td className="staff-name-cell">
+                        <strong>{request.staff_name}</strong>
+                      </td>
+                    )}
                     <td>{new Date(request.start_date).toLocaleDateString()}</td>
                     <td>{new Date(request.end_date).toLocaleDateString()}</td>
                     <td>{days} day{days !== 1 ? 's' : ''}</td>
@@ -173,7 +178,7 @@ function TimeOffRequests() {
                     </td>
                     <td>{new Date(request.created_at).toLocaleDateString()}</td>
                     <td className="actions-cell">
-                      {request.status === 'pending' && (
+                      {isAdmin && request.status === 'pending' && (
                         <>
                           <button
                             className="approve-button"
@@ -192,6 +197,7 @@ function TimeOffRequests() {
                       <button
                         className="delete-button"
                         onClick={() => handleDelete(request.id)}
+                        disabled={!isAdmin && request.status !== 'pending'}
                       >
                         Delete
                       </button>
@@ -209,6 +215,7 @@ function TimeOffRequests() {
         onClose={() => setShowRequestForm(false)}
         onSubmit={fetchData}
         staff={staff}
+        fixedStaffId={!isAdmin ? user?.staff_id : null}
       />
     </div>
   );

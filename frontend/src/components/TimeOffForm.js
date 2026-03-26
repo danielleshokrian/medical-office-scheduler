@@ -3,7 +3,7 @@ import { fetchWithAuth } from '../api.js';
 import { API_ENDPOINTS } from '../config';
 import './TimeOffForm.css';
 
-function TimeOffForm({ isOpen, onClose, onSubmit, staff }) {
+function TimeOffForm({ isOpen, onClose, onSubmit, staff, fixedStaffId }) {
   const [formData, setFormData] = useState({
     staff_id: '',
     start_date: '',
@@ -12,6 +12,12 @@ function TimeOffForm({ isOpen, onClose, onSubmit, staff }) {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  React.useEffect(() => {
+    if (fixedStaffId) {
+      setFormData(prev => ({ ...prev, staff_id: String(fixedStaffId) }));
+    }
+  }, [fixedStaffId]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -93,26 +99,30 @@ function TimeOffForm({ isOpen, onClose, onSubmit, staff }) {
         <form onSubmit={handleSubmit}>
           {error && <div className="error-message">{error}</div>}
 
-          <div className="form-group">
-            <label htmlFor="staff_id">Staff Member *</label>
-            <select
-              id="staff_id"
-              name="staff_id"
-              value={formData.staff_id}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Select Staff Member</option>
-              {staff
-                .filter(s => s.is_active)
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map(s => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} - {s.role}
-                  </option>
-                ))}
-            </select>
-          </div>
+          {!fixedStaffId ? (
+            <div className="form-group">
+              <label htmlFor="staff_id">Staff Member *</label>
+              <select
+                id="staff_id"
+                name="staff_id"
+                value={formData.staff_id}
+                onChange={handleChange}
+                required
+              >
+                <option value="">Select Staff Member</option>
+                {staff
+                  .filter(s => s.is_active)
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} - {s.role}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          ) : (
+            <input type="hidden" name="staff_id" value={formData.staff_id} />
+          )}
 
           <div className="form-row">
             <div className="form-group">

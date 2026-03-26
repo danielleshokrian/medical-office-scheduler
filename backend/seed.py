@@ -1,5 +1,5 @@
 from app import app, db
-from models import Staff, StaffArea, Shift, TimeOffRequest
+from models import Staff, StaffArea, Shift, TimeOffRequest, User
 from datetime import datetime, time, date, timedelta
 
 def seed_database():
@@ -7,6 +7,7 @@ def seed_database():
         print("Clearing existing data...")
         TimeOffRequest.query.delete()
         Shift.query.delete()
+        User.query.delete()
         Staff.query.delete()
         StaffArea.query.delete()
         db.session.commit()
@@ -124,12 +125,41 @@ def seed_database():
         db.session.add_all(time_off_requests)
         db.session.commit()
         print(f"Created {len(time_off_requests)} time-off requests")
+
+        print("Seeding users...")
+        lori_user = User(
+            username='lori',
+            email='lori@example.com',
+            role='nurse',
+            staff_id=lori.id
+        )
+        lori_user.set_password('nurse123')
+
+        may_user = User(
+            username='may',
+            email='may@example.com',
+            role='nurse',
+            staff_id=may.id
+        )
+        may_user.set_password('nurse123')
+
+        admin_user = User(
+            username='admin',
+            email='admin@example.com',
+            role='nurse_admin'
+        )
+        admin_user.set_password('admin123')
+
+        db.session.add_all([lori_user, may_user, admin_user])
+        db.session.commit()
+        print("Created 3 users (1 nurse admin, 2 nurses)")
         
         print(" Database seeded successfully!")
         print(f"   - {len(areas)} staff areas")
         print(f"   - {len(staff_members)} staff members")
         print(f"   - {len(sample_shifts)} shifts")
         print(f"   - {len(time_off_requests)} time-off requests")
+        print("   - 3 users")
 
 
 if __name__ == '__main__':
