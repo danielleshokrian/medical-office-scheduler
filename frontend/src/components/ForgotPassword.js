@@ -60,7 +60,7 @@ function ForgotPassword() {
             </div>
           ) : (
             <>
-              <h2>Forgot password?</h2>
+              <h2> Forgot password?</h2>
               <p style={{ color: 'var(--c-gray-500)', fontSize: 13, marginBottom: 20, textAlign: 'center' }}>
                 Enter your email and we'll send you a reset link.
               </p>
