@@ -921,7 +921,8 @@ def ai_generate_schedule():
         data = request.get_json()
         week_start = datetime.strptime(data['week_start_date'], '%Y-%m-%d').date()
         fill_empty_only = data.get('fill_empty_only', False)
-        
+        ai_instruction  = data.get('ai_instruction', '').strip()
+
         existing_shifts = None
         if fill_empty_only:
             week_end = week_start + timedelta(days=4)
@@ -929,8 +930,11 @@ def ai_generate_schedule():
                 Shift.date >= week_start,
                 Shift.date <= week_end
             ).all()
-        
-        result = generate_weekly_schedule(week_start, fill_empty_only, existing_shifts)
+
+        result = generate_weekly_schedule(
+            week_start, fill_empty_only, existing_shifts,
+            ai_instruction=ai_instruction or None
+        )
         
         if not result['success']:
             return jsonify({'error': result['message']}), 500
