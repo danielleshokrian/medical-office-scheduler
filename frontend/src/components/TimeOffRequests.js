@@ -131,6 +131,12 @@ function TimeOffRequests() {
 
   if (loading) return <div className="loading">Loading...</div>;
   if (error) return <div className="error">Error: {error}</div>;
+  if (!isAdmin && !user?.staff_id) return (
+    <div className="error" style={{ margin: '2rem auto', maxWidth: 480, textAlign: 'center' }}>
+      Your account is not linked to a staff record yet.<br />
+      Please contact your nurse administrator to get set up.
+    </div>
+  );
 
   return (
     <div className="time-off-container">
