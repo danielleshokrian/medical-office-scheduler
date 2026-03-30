@@ -1,238 +1,208 @@
-import os
+"""
+Deterministic rule-based weekly schedule generator for LICDH GI Lab.
+
+Rules enforced:
+- Scope Room: Olga + Jesus; sub 1 GI Tech if a scope tech is absent
+- Admitting: 2 RNs at 6:15 and 6:30
+- Recovery: 2 RNs at 7:30
+- Charge: 1 RN at 7:00 (not assigned to a procedure room)
+- Procedure Rooms 1-4: filled with remaining GI Techs (2 per room)
+  - Opener slot: Jess at 6:15; if Jess is off, Curtis at 6:15
+  - Other techs: 7:00 / 7:30 alternating
+- 4-day/week staff get exactly 1 day off Mon-Fri (distributed to balance coverage)
+- Deepa must be off Tuesday OR Thursday each week
+- Sam is always off Wednesday (required_days_off in DB)
+- Approved PTO and scheduled days off are respected
+- Per diem RNs are NOT auto-scheduled (added manually by admin as needed)
+"""
+
 import json
-from datetime import datetime, timedelta
-from openai import OpenAI
+from datetime import timedelta
 from db import db
-from models import Staff, StaffArea, Shift, TimeOffRequest
-from dotenv import load_dotenv
-from collections import defaultdict
-
-load_dotenv()
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-
-def validate_and_fix_schedule(shifts, staff_info, area_info, time_off_info, weekdays):
-    """
-    Validate AI-generated schedule and fix violations.
-    Returns (valid_shifts, errors)
-    """
-    valid_shifts = []
-    errors = []
-    
-    # Group shifts by staff_id and date for easy lookup
-    staff_schedule = defaultdict(list)
-    
-    for shift in shifts:
-        staff_id = shift['staff_id']
-        date = shift['date']
-        area_id = shift['area_id']
-        
-        # Find staff info
-        staff = next((s for s in staff_info if s['id'] == staff_id), None)
-        if not staff:
-            errors.append(f"Invalid staff_id {staff_id}")
-            continue
-        
-        # Validation 1: Check required days off
-        day_of_week = datetime.strptime(date, '%Y-%m-%d').strftime('%A')
-        if day_of_week in staff['required_days_off']:
-            errors.append(f"Skipped: {staff['name']} cannot work on {day_of_week} (required day off)")
-            continue
-        
-        # Validation 2: Check approved time-off
-        time_off_conflict = any(
-            to['staff_id'] == staff_id and 
-            to['start_date'] <= date <= to['end_date']
-            for to in time_off_info
-        )
-        if time_off_conflict:
-            errors.append(f"Skipped: {staff['name']} has time-off on {date}")
-            continue
-        
-        # Validation 3: Check for double-booking
-        if any(s['date'] == date for s in staff_schedule[staff_id]):
-            errors.append(f"Skipped: {staff['name']} already scheduled on {date}")
-            continue
-        
-        # Validation 4: Verify area exists
-        area = next((a for a in area_info if a['id'] == area_id), None)
-        if not area:
-            errors.append(f"Invalid area_id {area_id}")
-            continue
-        
-        # Shift is valid!
-        valid_shifts.append(shift)
-        staff_schedule[staff_id].append(shift)
-    
-    # Validation 5: Check flexible days off
-    for staff in staff_info:
-        if staff['flexible_days_off']:
-            staff_shifts = staff_schedule[staff['id']]
-            shift_days = [datetime.strptime(s['date'], '%Y-%m-%d').strftime('%A') for s in staff_shifts]
-            
-            # Must be off at least ONE of the flexible days
-            if all(day in shift_days for day in staff['flexible_days_off']):
-                errors.append(f"Warning: {staff['name']} should have at least one of {staff['flexible_days_off']} off")
-    
-    return valid_shifts, errors
+from models import Staff, StaffArea, TimeOffRequest
 
 
 def generate_weekly_schedule(week_start_date, fill_empty_only=False, existing_shifts=None):
     """
-    Generate a weekly schedule using OpenAI API with validation.
+    Build a deterministic weekly schedule for LICDH.
+    Returns: {success, shifts, message, validation_errors}
+    Each shift dict: {staff_id, area_id, date, start_time, end_time}
     """
-    try:
-        # Fetch data
-        staff_list = Staff.query.filter_by(is_active=True).all()
-        area_list = StaffArea.query.all()
-        week_end = week_start_date + timedelta(days=4)
+    warnings = []
+    all_shifts = []
 
-        time_off = TimeOffRequest.query.filter(
-            TimeOffRequest.status == "approved",
-            TimeOffRequest.start_date <= week_end,
-            TimeOffRequest.end_date >= week_start_date
-        ).all()
+    # ── Load data ──────────────────────────────────────────────────────────────
+    staff_list  = Staff.query.filter_by(is_active=True).all()
+    areas       = {a.name: a for a in StaffArea.query.all()}
+    week_end    = week_start_date + timedelta(days=4)
+    weekdays    = [week_start_date + timedelta(days=i) for i in range(5)]
 
-        # Serialize staff info
-        staff_info = []
-        for s in staff_list:
-            staff_info.append({
-                "id": s.id,
-                "name": s.name,
-                "role": s.role,
-                "shift_length": s.shift_length,
-                "days_per_week": s.days_per_week,
-                "start_time": s.start_time.strftime('%H:%M') if s.start_time else None,
-                "is_per_diem": s.is_per_diem,
-                "required_days_off": json.loads(s.required_days_off) if s.required_days_off else [],
-                "flexible_days_off": json.loads(s.flexible_days_off) if s.flexible_days_off else []
+    # ── Build blocked (staff_id, date_str) pairs ───────────────────────────────
+    blocked = set()
+
+    # Approved time-off (both PTO and scheduled days off)
+    approved = TimeOffRequest.query.filter(
+        TimeOffRequest.status == 'approved',
+        TimeOffRequest.start_date <= week_end,
+        TimeOffRequest.end_date >= week_start_date
+    ).all()
+    for t in approved:
+        cur = t.start_date
+        while cur <= t.end_date:
+            if week_start_date <= cur <= week_end:
+                blocked.add((t.staff_id, cur.strftime('%Y-%m-%d')))
+            cur += timedelta(days=1)
+
+    # Fixed required days off (e.g. Sam always off Wednesday)
+    for s in staff_list:
+        if s.required_days_off:
+            for day_name in json.loads(s.required_days_off):
+                for d in weekdays:
+                    if d.strftime('%A') == day_name:
+                        blocked.add((s.id, d.strftime('%Y-%m-%d')))
+
+    # ── Assign 1 flex day off for every 4-day/week staff ──────────────────────
+    # (Per diem staff are not auto-scheduled, so skip them here)
+    four_day = [s for s in staff_list if s.days_per_week == 4 and not s.is_per_diem]
+
+    # Track how many staff are already off each day (for even distribution)
+    off_count = {d.strftime('%Y-%m-%d'): 0 for d in weekdays}
+    for (_, ds) in blocked:
+        if ds in off_count:
+            off_count[ds] += 1
+
+    for s in four_day:
+        free_days = [d for d in weekdays if (s.id, d.strftime('%Y-%m-%d')) not in blocked]
+        if len(free_days) <= 4:
+            continue  # already has a day blocked this week (e.g. from PTO)
+
+        # Deepa: must be off Tuesday or Thursday
+        if s.flexible_days_off:
+            flex = json.loads(s.flexible_days_off)
+            preferred = [d for d in free_days if d.strftime('%A') in flex]
+            pool = preferred if preferred else free_days
+        else:
+            pool = free_days
+
+        # Pick the day with the fewest people already off (balance coverage)
+        chosen = min(pool, key=lambda d: off_count[d.strftime('%Y-%m-%d')])
+        ds = chosen.strftime('%Y-%m-%d')
+        blocked.add((s.id, ds))
+        off_count[ds] += 1
+
+    # ── Build schedule day by day ──────────────────────────────────────────────
+    for day_idx, day in enumerate(weekdays):
+        date_str = day.strftime('%Y-%m-%d')
+
+        today       = [s for s in staff_list if (s.id, date_str) not in blocked]
+        rns         = sorted([s for s in today if s.role == 'RN'      and not s.is_per_diem], key=lambda s: s.name)
+        gi_techs    = sorted([s for s in today if s.role == 'GI_Tech'],                        key=lambda s: s.name)
+        scope_techs = sorted([s for s in today if s.role == 'Scope_Tech'],                     key=lambda s: s.name)
+
+        assigned = set()
+
+        def add(staff, area_name, start_str):
+            """Create a shift record for this staff member in this area."""
+            area = areas.get(area_name)
+            if not area or staff.id in assigned:
+                return False
+            h, m = int(start_str[:2]), int(start_str[3:])
+            end_h = h + staff.shift_length
+            all_shifts.append({
+                'staff_id':   staff.id,
+                'area_id':    area.id,
+                'date':       date_str,
+                'start_time': start_str,
+                'end_time':   f"{end_h:02d}:{m:02d}",
             })
+            assigned.add(staff.id)
+            return True
 
-        # Area info
-        area_info = []
-        for a in area_list:
-            area_info.append({
-                "id": a.id,
-                "name": a.name,
-                "required_rn_count": a.required_rn_count,
-                "required_tech_count": a.required_tech_count,
-                "required_scope_tech_count": a.required_scope_tech_count
-            })
+        # ── 1. Scope Room ─────────────────────────────────────────────────────
+        # Primary: Olga (7:30) + Jesus (9:00) — start times stored in DB
+        for st in scope_techs:
+            start = st.start_time.strftime('%H:%M') if st.start_time else '07:30'
+            add(st, 'Scope Room', start)
 
-        # Time off info
-        time_off_info = []
-        for t in time_off:
-            time_off_info.append({
-                "staff_id": t.staff_id,
-                "staff_name": t.staff_member.name,
-                "start_date": t.start_date.strftime('%Y-%m-%d'),
-                "end_date": t.end_date.strftime('%Y-%m-%d')
-            })
+        # If fewer than 2 scope techs available, substitute 1 GI Tech
+        if len(scope_techs) < 2:
+            sub = next((gt for gt in gi_techs if gt.id not in assigned), None)
+            if sub:
+                add(sub, 'Scope Room', '07:00')
+                warnings.append(f"{date_str}: {sub.name} (GI Tech) substituting in Scope Room")
 
-        # Generate weekdays
-        weekdays = []
-        for i in range(5): 
-            day = week_start_date + timedelta(days=i)
-            weekdays.append({
-                'date': day.strftime('%Y-%m-%d'),
-                'day_name': day.strftime('%A')
-            })
+        # ── 2. GI Techs → Procedure Rooms ────────────────────────────────────
+        # Opener slot: Jess at 6:15; if Jess is off, Curtis opens at 6:15
+        gi_pool = [s for s in gi_techs if s.id not in assigned]
+        jess   = next((s for s in gi_pool if s.name == 'Jess'),   None)
+        curtis = next((s for s in gi_pool if s.name == 'Curtis'), None)
+        opener = jess or curtis
 
-        # Build prompt
-        prompt = f"""
-Generate a weekly schedule for a medical GI lab.
+        # Put opener first in pool
+        if opener:
+            gi_pool = [opener] + [s for s in gi_pool if s.id != opener.id]
 
-CRITICAL DATES (use these exact dates):
-{json.dumps(weekdays, indent=2)}
+        proc_rooms = [
+            'Procedure Room 1',
+            'Procedure Room 2',
+            'Procedure Room 3',
+            'Procedure Room 4',
+        ]
 
-STAFF (use exact IDs):
-{json.dumps(staff_info, indent=2)}
+        gi_ptr = 0
+        for room_name in proc_rooms:
+            if room_name not in areas:
+                continue
+            filled = 0
+            while filled < 2 and gi_ptr < len(gi_pool):
+                gt = gi_pool[gi_ptr]
+                # Opener keeps their DB start time (6:15); others alternate 7:00 / 7:30
+                if gt.start_time:
+                    start = gt.start_time.strftime('%H:%M')
+                else:
+                    start = '07:00' if (gi_ptr % 2 == 0) else '07:30'
+                add(gt, room_name, start)
+                gi_ptr += 1
+                filled += 1
+            if filled < 2:
+                warnings.append(f"{date_str}: {room_name} short-staffed ({filled}/2 GI Techs)")
 
-AREAS (use exact IDs):
-{json.dumps(area_info, indent=2)}
+        # ── 3. RNs → Admitting (early) + Recovery (7:30) + Charge (7:00) ─────
+        # Rotate assignment order each day so early shifts distribute fairly
+        rn_pool = rns[:]
+        offset  = day_idx % len(rn_pool) if rn_pool else 0
+        rn_pool = rn_pool[offset:] + rn_pool[:offset]
 
-APPROVED TIME-OFF (do not schedule):
-{json.dumps(time_off_info, indent=2)}
+        # Slot definitions: (start_time, area)
+        rn_slots = [
+            ('06:15', 'Admitting'),   # 1st early RN → Admitting
+            ('06:30', 'Admitting'),   # 2nd early RN → Admitting
+            ('07:30', 'Recovery'),    # 3rd RN        → Recovery
+            ('07:30', 'Recovery'),    # 4th RN        → Recovery
+            ('07:00', 'Charge'),      # 5th RN        → Charge (no room)
+        ]
 
-RULES:
-1. Each area needs 2 staff per day
-2. Match staff roles to area requirements
-3. Generate approximately 60 shifts total (12 per day × 5 days)
-4. Use the exact staff_id and area_id values provided above
-5. RNs for Admitting/Recovery, GI Techs for procedure rooms, Scope Techs for Scope Room
+        for i, rn in enumerate(rn_pool):
+            if i >= len(rn_slots):
+                break
+            start, area_name = rn_slots[i]
+            add(rn, area_name, start)
 
-OUTPUT FORMAT - VALID JSON ONLY, NO MARKDOWN OR EXPLANATIONS:
-[
-  {{"staff_id": 1, "area_id": 1, "date": "2025-10-27", "start_time": "06:15", "end_time": "16:15"}},
-  {{"staff_id": 2, "area_id": 1, "date": "2025-10-27", "start_time": "06:30", "end_time": "16:30"}}
-]
-"""
+        # Coverage warnings
+        for area_name, req_count in [('Admitting', 2), ('Recovery', 2)]:
+            a = areas.get(area_name)
+            if a:
+                n = sum(1 for sh in all_shifts
+                        if sh['date'] == date_str and sh['area_id'] == a.id)
+                if n < req_count:
+                    warnings.append(
+                        f"{date_str}: {area_name} only has {n}/{req_count} RNs — "
+                        f"consider adding a per diem RN"
+                    )
 
-        # Call OpenAI
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are a scheduling assistant. Return ONLY valid JSON array, no markdown, no explanations."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
-            max_tokens=12000
-        )
-
-        content = response.choices[0].message.content.strip()
-
-        # Logging
-        print("\n" + "="*80)
-        print("RAW AI RESPONSE (first 500 chars):")
-        print("="*80)
-        print(content[:500])
-        print("="*80 + "\n")
-
-        # Clean JSON
-        if content.startswith("```"):
-            lines = content.split("\n")
-            content = "\n".join(lines[1:-1])  # Remove first and last line
-            if content.startswith("json"):
-                content = content[4:]
-            content = content.strip()
-
-        # Parse AI output
-        try:
-            ai_shifts = json.loads(content)
-        except json.JSONDecodeError as e:
-            print(f"❌ JSON Parse Error: {e}")
-            print(f"Content that failed: {content[:1000]}")
-            raise Exception(f"AI returned invalid JSON: {str(e)}")
-
-        # VALIDATE AND FIX
-        valid_shifts, validation_errors = validate_and_fix_schedule(
-            ai_shifts, 
-            staff_info, 
-            area_info, 
-            time_off_info, 
-            weekdays
-        )
-
-        print(f"\n✅ Valid shifts: {len(valid_shifts)} out of {len(ai_shifts)}")
-        print(f"⚠️ Validation errors: {len(validation_errors)}")
-        for error in validation_errors[:10]:
-            print(f"  - {error}")
-
-        return {
-            "success": True,
-            "shifts": valid_shifts,
-            "message": f"✅ Generated {len(valid_shifts)} valid shifts ({len(ai_shifts) - len(valid_shifts)} filtered out)",
-            "validation_errors": validation_errors[:20]
-        }
-
-    except Exception as e:
-        print(f"❌ Error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return {
-            "success": False,
-            "shifts": [],
-            "message": f"❌ Failed to generate schedule: {str(e)}",
-            "validation_errors": []
-        }
+    return {
+        'success': True,
+        'shifts': all_shifts,
+        'message': f'Generated {len(all_shifts)} shifts ({len(warnings)} warnings)',
+        'validation_errors': warnings,
+    }
