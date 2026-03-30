@@ -1,42 +1,40 @@
 import React, { useState } from 'react';
 import { useAuth } from '../AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import './Login.css';
 
 function Login() {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  const successMessage = searchParams.get('registered')
+    ? 'Account created! You can now sign in.'
+    : searchParams.get('reset')
+    ? 'Password updated! You can now sign in.'
+    : null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-
-    const result = await login(username, password);
+    const result = await login(email, password);
     setLoading(false);
-
-    if (result.success) {
-      navigate('/');
-    } else {
-      setError(result.error || 'Invalid username or password');
-    }
+    if (result.success) navigate('/');
+    else setError(result.error || 'Invalid email or password');
   };
 
-  const handleDemoLogin = async (demoUsername, demoPassword) => {
+  const handleDemoLogin = async (demoEmail, demoPassword) => {
     setError('');
     setLoading(true);
-    const result = await login(demoUsername, demoPassword);
+    const result = await login(demoEmail, demoPassword);
     setLoading(false);
-
-    if (result.success) {
-      navigate('/');
-    } else {
-      setError(result.error || 'Demo login failed');
-    }
+    if (result.success) navigate('/');
+    else setError(result.error || 'Demo login failed');
   };
 
   return (
@@ -44,10 +42,10 @@ function Login() {
       <div className="login-wrapper">
         <div className="login-header">
           <div className="login-logo">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 5v14M5 12h14"/>
-          </svg>
-        </div>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+          </div>
           <h1>Medical Office Scheduler</h1>
           <p>Staff scheduling and time-off management</p>
         </div>
@@ -66,11 +64,9 @@ function Login() {
               <li>Approve or deny time-off requests</li>
               <li>AI-assisted schedule generation</li>
             </ul>
-            <button
-              className="demo-role-button admin-demo-button"
-              onClick={() => handleDemoLogin('admin', 'admin123')}
-              disabled={loading}
-            >
+            <button className="demo-role-button admin-demo-button"
+              onClick={() => handleDemoLogin('admin@example.com', 'admin123')}
+              disabled={loading}>
               Demo: Admin Login
             </button>
           </div>
@@ -89,11 +85,9 @@ function Login() {
               <li>Track request status</li>
               <li>View your assigned shifts</li>
             </ul>
-            <button
-              className="demo-role-button nurse-demo-button"
-              onClick={() => handleDemoLogin('lori', 'nurse123')}
-              disabled={loading}
-            >
+            <button className="demo-role-button nurse-demo-button"
+              onClick={() => handleDemoLogin('lori@example.com', 'nurse123')}
+              disabled={loading}>
               Demo: Nurse Login
             </button>
           </div>
@@ -102,38 +96,40 @@ function Login() {
         <div className="login-box">
           <h2>Sign In</h2>
 
+          {successMessage && (
+            <div className="success-message">{successMessage}</div>
+          )}
           {error && <div className="error-message">{error}</div>}
 
           <form onSubmit={handleSubmit}>
             <div className="form-group">
-              <label htmlFor="username">Username</label>
-              <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter your username"
-                required
-                autoFocus
-              />
+              <label htmlFor="email">Email</label>
+              <input id="email" type="email" value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="you@example.com" required autoFocus />
             </div>
 
             <div className="form-group">
-              <label htmlFor="password">Password</label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                required
-              />
+              <label htmlFor="password">
+                Password
+                <Link to="/forgot-password" className="forgot-link">Forgot password?</Link>
+              </label>
+              <input id="password" type="password" value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="Enter your password" required />
             </div>
 
             <button type="submit" className="login-button" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
+
+          <p style={{ textAlign: 'center', marginTop: 16, fontSize: 13, color: 'var(--c-gray-500)' }}>
+            New nurse?{' '}
+            <Link to="/register" style={{ color: 'var(--c-primary)', fontWeight: 600 }}>
+              Create an account
+            </Link>
+          </p>
         </div>
       </div>
     </div>

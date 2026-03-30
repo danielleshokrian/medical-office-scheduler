@@ -205,6 +205,8 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), default='nurse')  # 'nurse_admin' or 'nurse'
     staff_id = db.Column(db.Integer, db.ForeignKey('staff.id'), nullable=True)
+    reset_token = db.Column(db.String(200), nullable=True)
+    reset_token_expiry = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     staff_member = db.relationship('Staff', foreign_keys=[staff_id])
     

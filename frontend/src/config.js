@@ -40,6 +40,10 @@ export const API_ENDPOINTS = {
 
   AUTH_ME: buildApiUrl('auth/me'),
 
+  AUTH_FORGOT_PASSWORD: buildApiUrl('auth/forgot-password'),
+
+  AUTH_RESET_PASSWORD: buildApiUrl('auth/reset-password'),
+
  
 
   // Staff
