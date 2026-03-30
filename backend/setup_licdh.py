@@ -27,11 +27,12 @@ def setup():
         # ── Areas ──────────────────────────────────────────────────────────
         print("Creating staff areas...")
         areas = [
-            StaffArea(name='Admitting',       required_rn_count=2, required_tech_count=0),
-            StaffArea(name='Recovery',         required_rn_count=2, required_tech_count=0),
-            StaffArea(name='Procedure Room 2', required_rn_count=0, required_tech_count=2),
-            StaffArea(name='Procedure Room 3', required_rn_count=0, required_tech_count=2),
-            StaffArea(name='Procedure Room 4', required_rn_count=0, required_tech_count=2),
+            StaffArea(name='Admitting',        required_rn_count=2, required_tech_count=0),
+            StaffArea(name='Recovery',          required_rn_count=2, required_tech_count=0),
+            StaffArea(name='Procedure Room 1',  required_rn_count=0, required_tech_count=2),
+            StaffArea(name='Procedure Room 2',  required_rn_count=0, required_tech_count=2),
+            StaffArea(name='Procedure Room 3',  required_rn_count=0, required_tech_count=2),
+            StaffArea(name='Procedure Room 4',  required_rn_count=0, required_tech_count=2),
             StaffArea(
                 name='Scope Room',
                 required_rn_count=0,
@@ -39,6 +40,10 @@ def setup():
                 required_scope_tech_count=2,
                 special_rules='Primarily Olga and Jesus. Can substitute 1 scope tech with GI tech if needed.'
             ),
+            StaffArea(name='Float',  required_rn_count=0, required_tech_count=0,
+                      special_rules='1 staff slot — flexible coverage as needed.'),
+            StaffArea(name='Charge', required_rn_count=0, required_tech_count=0,
+                      special_rules='1 staff slot — charge nurse role.'),
         ]
         db.session.add_all(areas)
         db.session.commit()
