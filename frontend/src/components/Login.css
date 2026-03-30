@@ -197,6 +197,30 @@
 .login-button:hover:not(:disabled) { background: var(--c-primary-dk); }
 .login-button:disabled { opacity: 0.65; cursor: not-allowed; }
 
+.success-message {
+  background: var(--c-success-bg);
+  color: var(--c-success);
+  padding: 10px 14px;
+  border-radius: var(--r);
+  margin-bottom: 16px;
+  border-left: 3px solid var(--c-success);
+  font-size: 13px;
+}
+
+.form-group label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.forgot-link {
+  font-size: 12px;
+  color: var(--c-primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+.forgot-link:hover { text-decoration: underline; }
+
 .error-message {
   background: var(--c-danger-bg);
   color: var(--c-danger);

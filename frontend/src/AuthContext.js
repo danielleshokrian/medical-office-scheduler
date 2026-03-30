@@ -43,24 +43,20 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (username, password) => {
+  const login = async (email, password) => {
     try {
       const response = await fetch(API_ENDPOINTS.AUTH_LOGIN, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ email, password })
       });
-
-    console.log('Login response status:', response.status); 
 
       if (!response.ok) {
         const error = await response.json();
-        console.log('Login error:', error);
         throw new Error(error.error || 'Login failed');
       }
 
       const data = await response.json();
-      console.log('Login success data:', data);
 
       localStorage.setItem('access_token', data.access_token);
       localStorage.setItem('refresh_token', data.refresh_token);
@@ -68,7 +64,6 @@ export const AuthProvider = ({ children }) => {
       setUser(data.user);
       return { success: true };
     } catch (error) {
-        console.log('Login catch error:', error); 
       return { success: false, error: error.message };
     }
   };

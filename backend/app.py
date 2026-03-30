@@ -5,11 +5,13 @@ from flask_jwt_extended import (
     JWTManager, create_access_token, create_refresh_token,
     jwt_required, get_jwt_identity, get_jwt
 )
+from flask_mail import Mail, Message
 from models import Staff, StaffArea, Shift, TimeOffRequest, AISuggestion, User
 from db import db
 import os
 import json
 import logging
+import secrets
 from logging.handlers import RotatingFileHandler
 from dotenv import load_dotenv
 from datetime import datetime, timedelta, date
@@ -30,6 +32,7 @@ db.init_app(app)
 migrate = Migrate(app, db)
 
 jwt = JWTManager(app)
+mail = Mail(app)
 
 allowed_origins = [
     "http://localhost:3000",
@@ -90,48 +93,43 @@ def require_roles(*allowed_roles):
 
 @app.route('/auth/register', methods=['POST'])
 def register():
-    """Register a new user"""
+    """Register a new nurse account using the clinic invite code"""
     try:
         data = request.get_json()
-        
-        if not all(k in data for k in ['username', 'email', 'password', 'role']):
-            return jsonify({'error': 'Missing required fields'}), 400
 
-        valid_roles = ['nurse_admin', 'nurse']
-        if data['role'] not in valid_roles:
-            return jsonify({'error': f'Role must be one of: {", ".join(valid_roles)}'}), 400
-        
-        if User.query.filter_by(username=data['username']).first():
-            return jsonify({'error': 'Username already exists'}), 400
-        
-        if User.query.filter_by(email=data['email']).first():
-            return jsonify({'error': 'Email already exists'}), 400
-        
-        user = User(
-            username=data['username'],
-            email=data['email'],
-            role=data['role'],
-            staff_id=data.get('staff_id')
-        )
+        required = ['name', 'email', 'password', 'invite_code']
+        if not all(k in data for k in required):
+            return jsonify({'error': 'name, email, password, and invite_code are required'}), 400
 
-        if user.role == 'nurse' and not user.staff_id:
-            return jsonify({'error': 'staff_id is required for nurse users'}), 400
+        # Validate invite code
+        invite_code = app.config.get('CLINIC_INVITE_CODE', '')
+        if data['invite_code'].strip() != invite_code:
+            return jsonify({'error': 'Invalid invite code. Please contact your nurse administrator.'}), 403
 
-        if user.staff_id:
-            linked_staff = Staff.query.get(user.staff_id)
-            if not linked_staff:
-                return jsonify({'error': 'Staff member not found for provided staff_id'}), 404
+        if len(data['password']) < 8:
+            return jsonify({'error': 'Password must be at least 8 characters'}), 400
 
+        email = data['email'].strip().lower()
+
+        if User.query.filter_by(email=email).first():
+            return jsonify({'error': 'An account with this email already exists'}), 400
+
+        # Derive a unique username from the name
+        base = data['name'].strip().lower().replace(' ', '.')
+        username = base
+        counter = 1
+        while User.query.filter_by(username=username).first():
+            username = f"{base}{counter}"
+            counter += 1
+
+        user = User(username=username, email=email, role='nurse')
         user.set_password(data['password'])
-        
+
         db.session.add(user)
         db.session.commit()
-        
-        return jsonify({
-            'message': 'User registered successfully',
-            'user': user.to_dict()
-        }), 201
-        
+
+        return jsonify({'message': 'Account created successfully. You can now log in.'}), 201
+
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
@@ -139,18 +137,19 @@ def register():
 
 @app.route('/auth/login', methods=['POST'])
 def login():
-    """Login and get JWT tokens"""
+    """Login with email and password"""
     try:
         data = request.get_json()
-        
-        if not all(k in data for k in ['username', 'password']):
-            return jsonify({'error': 'Missing username or password'}), 400
-        
-        user = User.query.filter_by(username=data['username']).first()
-        
+
+        if not all(k in data for k in ['email', 'password']):
+            return jsonify({'error': 'Email and password are required'}), 400
+
+        email = data['email'].strip().lower()
+        user = User.query.filter_by(email=email).first()
+
         if not user or not user.check_password(data['password']):
-            return jsonify({'error': 'Invalid username or password'}), 401
-        
+            return jsonify({'error': 'Invalid email or password'}), 401
+
         access_token = create_access_token(
             identity=str(user.id),
             additional_claims={'role': user.role}
@@ -163,8 +162,82 @@ def login():
             'refresh_token': refresh_token,
             'user': user.to_dict()
         }), 200
-        
+
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/auth/forgot-password', methods=['POST'])
+def forgot_password():
+    """Send a password reset email"""
+    try:
+        data = request.get_json()
+        email = (data.get('email') or '').strip().lower()
+        if not email:
+            return jsonify({'error': 'Email is required'}), 400
+
+        user = User.query.filter_by(email=email).first()
+
+        # Always return success to avoid leaking whether an email exists
+        if user:
+            token = secrets.token_urlsafe(32)
+            user.reset_token = token
+            user.reset_token_expiry = datetime.utcnow() + timedelta(hours=1)
+            db.session.commit()
+
+            frontend_url = app.config.get('FRONTEND_URL', 'http://localhost:3000')
+            reset_link = f"{frontend_url}/reset-password?token={token}"
+
+            try:
+                msg = Message(
+                    subject='Password Reset — Medical Office Scheduler',
+                    recipients=[user.email]
+                )
+                msg.body = (
+                    f"Hi {user.username},\n\n"
+                    f"You requested a password reset. Click the link below to set a new password.\n"
+                    f"This link expires in 1 hour.\n\n"
+                    f"{reset_link}\n\n"
+                    f"If you did not request this, you can ignore this email.\n"
+                )
+                mail.send(msg)
+            except Exception as mail_err:
+                app.logger.error(f"Failed to send reset email: {mail_err}")
+
+        return jsonify({'message': 'If that email is registered, a reset link has been sent.'}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/auth/reset-password', methods=['POST'])
+def reset_password():
+    """Reset password using a valid token"""
+    try:
+        data = request.get_json()
+        token = data.get('token', '').strip()
+        new_password = data.get('password', '')
+
+        if not token or not new_password:
+            return jsonify({'error': 'Token and new password are required'}), 400
+
+        if len(new_password) < 8:
+            return jsonify({'error': 'Password must be at least 8 characters'}), 400
+
+        user = User.query.filter_by(reset_token=token).first()
+
+        if not user or not user.reset_token_expiry or user.reset_token_expiry < datetime.utcnow():
+            return jsonify({'error': 'Reset link is invalid or has expired'}), 400
+
+        user.set_password(new_password)
+        user.reset_token = None
+        user.reset_token_expiry = None
+        db.session.commit()
+
+        return jsonify({'message': 'Password updated successfully. You can now log in.'}), 200
+
+    except Exception as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
 
