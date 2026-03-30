@@ -125,7 +125,7 @@ function Login() {
           </form>
 
           <p style={{ textAlign: 'center', marginTop: 16, fontSize: 13, color: 'var(--c-gray-500)' }}>
-            New nurse?{' '}
+            New employee?{' '}
             <Link to="/register" style={{ color: 'var(--c-primary)', fontWeight: 600 }}>
               Create an account
             </Link>
