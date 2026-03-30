@@ -122,7 +122,18 @@ def register():
             username = f"{base}{counter}"
             counter += 1
 
-        user = User(username=username, email=email, role='nurse')
+        # Try to link to existing staff record by first name (case-insensitive)
+        first_name = data['name'].strip().split()[0]
+        matched_staff = Staff.query.filter(
+            db.func.lower(Staff.name).like(db.func.lower(first_name) + '%')
+        ).first()
+
+        user = User(
+            username=username,
+            email=email,
+            role='nurse',
+            staff_id=matched_staff.id if matched_staff else None
+        )
         user.set_password(data['password'])
 
         db.session.add(user)
