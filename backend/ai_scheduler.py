@@ -1,5 +1,6 @@
 """
 Deterministic rule-based weekly schedule generator for LICDH GI Lab.
+An optional AI adjustment layer can apply plain-English changes on top.
 
 Rules enforced:
 - Scope Room: Olga + Jesus; sub 1 GI Tech if a scope tech is absent
@@ -16,13 +17,115 @@ Rules enforced:
 - Per diem RNs are NOT auto-scheduled (added manually by admin as needed)
 """
 
+import os
 import json
 from datetime import timedelta
 from db import db
 from models import Staff, StaffArea, TimeOffRequest
 
+try:
+    from openai import OpenAI
+    _openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY")) if os.getenv("OPENAI_API_KEY") else None
+except ImportError:
+    _openai_client = None
 
-def generate_weekly_schedule(week_start_date, fill_empty_only=False, existing_shifts=None):
+
+def apply_ai_adjustments(shifts, instruction, staff_list, area_list):
+    """
+    Takes a deterministic schedule and applies plain-English adjustments via OpenAI.
+    The AI only tweaks the existing schedule — it cannot violate hard rules.
+    Returns (adjusted_shifts, ai_notes).
+    """
+    if not _openai_client:
+        return shifts, ["OpenAI not configured — skipping AI adjustment"]
+
+    # Build human-readable schedule for the AI
+    staff_by_id = {s.id: s for s in staff_list}
+    area_by_id  = {a.id: a for a in area_list}
+
+    readable = []
+    for sh in shifts:
+        s = staff_by_id.get(sh['staff_id'])
+        a = area_by_id.get(sh['area_id'])
+        readable.append({
+            'staff_id':   sh['staff_id'],
+            'staff_name': s.name if s else '?',
+            'role':       s.role if s else '?',
+            'area_id':    sh['area_id'],
+            'area_name':  a.name if a else '?',
+            'date':       sh['date'],
+            'start_time': sh['start_time'],
+            'end_time':   sh['end_time'],
+        })
+
+    staff_roster = [
+        {'id': s.id, 'name': s.name, 'role': s.role,
+         'shift_length': s.shift_length, 'is_per_diem': s.is_per_diem}
+        for s in staff_list
+    ]
+
+    prompt = f"""You are adjusting a pre-built medical GI lab schedule.
+
+CURRENT SCHEDULE:
+{json.dumps(readable, indent=2)}
+
+STAFF ROSTER:
+{json.dumps(staff_roster, indent=2)}
+
+ADJUSTMENT REQUESTED:
+{instruction}
+
+HARD RULES — never violate these:
+1. No staff member may appear twice on the same date
+2. Scope Room must have exactly 2 people every day
+3. Admitting must have exactly 2 RNs every day
+4. Recovery must have exactly 2 RNs every day
+5. Do not invent staff IDs or area IDs not in the roster above
+
+Return ONLY the complete modified schedule as a JSON array (same fields as input, \
+including staff_name and area_name for display):
+[{{"staff_id": 1, "area_id": 2, "date": "YYYY-MM-DD", "start_time": "HH:MM", "end_time": "HH:MM"}}]
+No markdown, no explanation — just the JSON array."""
+
+    try:
+        response = _openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a scheduling assistant. Return ONLY a valid JSON array."},
+                {"role": "user",   "content": prompt},
+            ],
+            temperature=0.2,
+            max_tokens=12000,
+        )
+        content = response.choices[0].message.content.strip()
+
+        # Strip markdown fences if present
+        if content.startswith("```"):
+            lines = content.split("\n")
+            content = "\n".join(lines[1:-1]).strip()
+            if content.startswith("json"):
+                content = content[4:].strip()
+
+        adjusted = json.loads(content)
+
+        # Hard-rule guard: remove duplicates (same staff, same date)
+        seen = set()
+        deduped = []
+        for sh in adjusted:
+            key = (sh['staff_id'], sh['date'])
+            if key not in seen:
+                seen.add(key)
+                deduped.append(sh)
+
+        return deduped, [f"AI applied: {instruction}"]
+
+    except Exception as e:
+        print(f"AI adjustment failed: {e}")
+        return shifts, [f"AI adjustment failed ({e}) — original schedule kept"]
+
+
+def generate_weekly_schedule(week_start_date, fill_empty_only=False, existing_shifts=None,
+                             ai_instruction=None):
     """
     Build a deterministic weekly schedule for LICDH.
     Returns: {success, shifts, message, validation_errors}
@@ -200,9 +303,20 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False, existing_sh
                         f"consider adding a per diem RN"
                     )
 
+    # ── Optional AI adjustment layer ──────────────────────────────────────────
+    ai_notes = []
+    final_shifts = all_shifts
+    if ai_instruction and ai_instruction.strip():
+        area_list = list(areas.values())
+        final_shifts, ai_notes = apply_ai_adjustments(
+            all_shifts, ai_instruction.strip(), staff_list, area_list
+        )
+
+    all_warnings = warnings + ai_notes
     return {
         'success': True,
-        'shifts': all_shifts,
-        'message': f'Generated {len(all_shifts)} shifts ({len(warnings)} warnings)',
-        'validation_errors': warnings,
+        'shifts': final_shifts,
+        'message': f'Generated {len(final_shifts)} shifts ({len(warnings)} warnings)'
+                   + (f' — AI adjusted' if ai_notes and 'failed' not in ai_notes[0] else ''),
+        'validation_errors': all_warnings,
     }

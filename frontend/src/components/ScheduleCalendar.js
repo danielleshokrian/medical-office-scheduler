@@ -27,6 +27,7 @@ function ScheduleCalendar() {
   const [previewShifts, setPreviewShifts] = useState([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
+  const [aiInstruction, setAiInstruction] = useState('');
 
 
 
@@ -283,10 +284,11 @@ const handleShiftSubmit = (data) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         week_start_date: monday.toISOString().split('T')[0],
-        fill_empty_only: false
+        fill_empty_only: false,
+        ai_instruction: aiInstruction.trim() || null
       })
     });
-    
+
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.error || 'Failed to generate schedule');
@@ -324,10 +326,11 @@ const handleFillEmptyShifts = async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         week_start_date: monday.toISOString().split('T')[0],
-        fill_empty_only: true
+        fill_empty_only: true,
+        ai_instruction: aiInstruction.trim() || null
       })
     });
-    
+
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(errorData.error || 'Failed to generate suggestions');
@@ -535,22 +538,30 @@ const handleClearSchedule = async () => {
               </button>
                       
                 <div className="ai-buttons">
-                  <button 
-                    onClick={handleFillEmptyShifts} 
+                  <input
+                    className="ai-instruction-input"
+                    type="text"
+                    placeholder="Optional: any adjustments? e.g. 'Put Mary in Recovery on Monday'"
+                    value={aiInstruction}
+                    onChange={e => setAiInstruction(e.target.value)}
+                    disabled={aiLoading || previewMode}
+                  />
+                  <button
+                    onClick={handleFillEmptyShifts}
                     className="ai-fill-button"
                     disabled={aiLoading || previewMode}
                   >
                     Fill Empty Shifts
                   </button>
-                  <button 
-                    onClick={handleGenerateFullSchedule} 
+                  <button
+                    onClick={handleGenerateFullSchedule}
                     className="ai-generate-button"
                     disabled={aiLoading || previewMode}
                   >
                     Generate Full Schedule
                   </button>
 
-                  <button 
+                  <button
                     onClick={handleClearSchedule}
                     className="clear-schedule-button"
                     disabled={aiLoading || previewMode}
@@ -589,7 +600,10 @@ const handleClearSchedule = async () => {
       {aiLoading && (
         <div className="ai-loading">
           <div className="spinner"></div>
-          <p>AI is generating schedule... This may take 10-20 seconds</p>
+          <p>{aiInstruction.trim()
+            ? 'Building schedule then applying AI adjustments...'
+            : 'Building schedule...'}
+          </p>
         </div>
       )}
         <div className="schedule-grid">
