@@ -922,6 +922,7 @@ def ai_generate_schedule():
         week_start = datetime.strptime(data['week_start_date'], '%Y-%m-%d').date()
         fill_empty_only = data.get('fill_empty_only', False)
         ai_instruction  = (data.get('ai_instruction') or '').strip()
+        active_rooms    = data.get('active_rooms') or None  # {date_str: [room_names]}
 
         existing_shifts = None
         if fill_empty_only:
@@ -933,7 +934,8 @@ def ai_generate_schedule():
 
         result = generate_weekly_schedule(
             week_start, fill_empty_only, existing_shifts,
-            ai_instruction=ai_instruction or None
+            ai_instruction=ai_instruction or None,
+            active_rooms=active_rooms
         )
         
         if not result['success']:
