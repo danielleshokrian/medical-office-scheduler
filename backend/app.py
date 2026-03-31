@@ -921,7 +921,7 @@ def ai_generate_schedule():
         data = request.get_json()
         week_start = datetime.strptime(data['week_start_date'], '%Y-%m-%d').date()
         fill_empty_only = data.get('fill_empty_only', False)
-        ai_instruction  = data.get('ai_instruction', '').strip()
+        ai_instruction  = (data.get('ai_instruction') or '').strip()
 
         existing_shifts = None
         if fill_empty_only:
