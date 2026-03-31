@@ -270,92 +270,98 @@ const handleShiftSubmit = (data) => {
 
   // AI Scheduling Handlers
   const handleGenerateFullSchedule = async () => {
-  if (!window.confirm('⚠️ This will replace ALL existing shifts for this week. Continue?')) {
-    return;
-  }
-  
-  setAiLoading(true);
-  setAiError('');
-  
-  try {
-    const monday = getMonday(currentWeek);
-    const response = await fetchWithAuth(API_ENDPOINTS.AI_GENERATE, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        week_start_date: monday.toISOString().split('T')[0],
-        fill_empty_only: false,
-        ai_instruction: aiInstruction.trim() || null
-      })
-    });
+    if (!window.confirm('This will replace ALL existing shifts for this week. Continue?')) return;
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to generate schedule');
+    setAiLoading(true);
+    setAiError('');
+
+    try {
+      const monday = getMonday(currentWeek);
+      const weekStart = monday.toISOString().split('T')[0];
+
+      // Step 1: generate
+      const genRes = await fetchWithAuth(API_ENDPOINTS.AI_GENERATE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          week_start_date: weekStart,
+          fill_empty_only: false,
+          ai_instruction: aiInstruction.trim() || null
+        })
+      });
+      if (!genRes.ok) {
+        const err = await genRes.json();
+        throw new Error(err.error || 'Failed to generate schedule');
+      }
+      const genData = await genRes.json();
+
+      // Step 2: immediately apply (replace existing)
+      const applyRes = await fetchWithAuth(API_ENDPOINTS.AI_APPLY, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shifts: genData.shifts,
+          clear_existing: true,
+          week_start_date: weekStart
+        })
+      });
+      if (!applyRes.ok) {
+        const err = await applyRes.json();
+        throw new Error(err.error || 'Failed to save schedule');
+      }
+
+      fetchScheduleData();
+    } catch (err) {
+      setAiError(err.message);
+    } finally {
+      setAiLoading(false);
     }
-    
-    const data = await response.json();
-    
-    // Convert AI shifts to preview format with staff/area info
-    const shiftsWithInfo = data.shifts.map(shift => ({
-      ...shift,
-      id: `preview-${Math.random()}`,
-      staff_name: staff.find(s => s.id === shift.staff_id)?.name || 'Unknown',
-      staff_role: staff.find(s => s.id === shift.staff_id)?.role || 'Unknown',
-      area_name: areas.find(a => a.id === shift.area_id)?.name || 'Unknown',
-      is_preview: true
-    }));
-    
-    setPreviewShifts(shiftsWithInfo);
-    setPreviewMode(true);
-    setAiLoading(false);
-  } catch (err) {
-    setAiError(err.message);
-    setAiLoading(false);
-  }
-};
+  };
 
-const handleFillEmptyShifts = async () => {
-  setAiLoading(true);
-  setAiError('');
-  
-  try {
-    const monday = getMonday(currentWeek);
-    const response = await fetchWithAuth(API_ENDPOINTS.AI_GENERATE, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        week_start_date: monday.toISOString().split('T')[0],
-        fill_empty_only: true,
-        ai_instruction: aiInstruction.trim() || null
-      })
-    });
+  const handleFillEmptyShifts = async () => {
+    setAiLoading(true);
+    setAiError('');
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to generate suggestions');
+    try {
+      const monday = getMonday(currentWeek);
+      const weekStart = monday.toISOString().split('T')[0];
+
+      const genRes = await fetchWithAuth(API_ENDPOINTS.AI_GENERATE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          week_start_date: weekStart,
+          fill_empty_only: true,
+          ai_instruction: aiInstruction.trim() || null
+        })
+      });
+      if (!genRes.ok) {
+        const err = await genRes.json();
+        throw new Error(err.error || 'Failed to generate suggestions');
+      }
+      const genData = await genRes.json();
+
+      const applyRes = await fetchWithAuth(API_ENDPOINTS.AI_APPLY, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shifts: genData.shifts,
+          clear_existing: false,
+          week_start_date: weekStart
+        })
+      });
+      if (!applyRes.ok) {
+        const err = await applyRes.json();
+        throw new Error(err.error || 'Failed to save shifts');
+      }
+
+      fetchScheduleData();
+    } catch (err) {
+      setAiError(err.message);
+    } finally {
+      setAiLoading(false);
     }
-    
-    const data = await response.json();
-    
-    // Convert AI shifts to preview format with staff/area info
-    const shiftsWithInfo = data.shifts.map(shift => ({
-      ...shift,
-      id: `preview-${Math.random()}`,
-      staff_name: staff.find(s => s.id === shift.staff_id)?.name || 'Unknown',
-      staff_role: staff.find(s => s.id === shift.staff_id)?.role || 'Unknown',
-      area_name: areas.find(a => a.id === shift.area_id)?.name || 'Unknown',
-      is_preview: true
-    }));
-    
-    setPreviewShifts(shiftsWithInfo);
-    setPreviewMode(true);
-    setAiLoading(false);
-  } catch (err) {
-    setAiError(err.message);
-    setAiLoading(false);
-  }
-};
+  };
 
 const handleApplySchedule = async () => {
   setAiLoading(true);
@@ -549,14 +555,14 @@ const handleClearSchedule = async () => {
                   <button
                     onClick={handleFillEmptyShifts}
                     className="ai-fill-button"
-                    disabled={aiLoading || previewMode}
+                    disabled={aiLoading}
                   >
                     Fill Empty Shifts
                   </button>
                   <button
                     onClick={handleGenerateFullSchedule}
                     className="ai-generate-button"
-                    disabled={aiLoading || previewMode}
+                    disabled={aiLoading}
                   >
                     Generate Full Schedule
                   </button>
@@ -564,7 +570,7 @@ const handleClearSchedule = async () => {
                   <button
                     onClick={handleClearSchedule}
                     className="clear-schedule-button"
-                    disabled={aiLoading || previewMode}
+                    disabled={aiLoading}
                   >
                     Clear Schedule
                   </button>
@@ -572,30 +578,10 @@ const handleClearSchedule = async () => {
             </>
           )}
           </div>
-                {previewMode && canEditSchedule && (
-        <div className="preview-banner">
-          <div className="preview-info">
-            <strong>Preview Mode:</strong> {previewShifts.length} shifts suggested
-            {aiError && <span className="preview-error">Error: {aiError}</span>}
-          </div>
-          <div className="preview-actions">
-            <button 
-              onClick={handleApplySchedule} 
-              className="apply-button"
-              disabled={aiLoading}
-            >
-              {aiLoading ? 'Applying...' : '✓ Apply Schedule'}
-            </button>
-            <button 
-              onClick={handleCancelPreview} 
-              className="cancel-preview-button"
-              disabled={aiLoading}
-            >
-              ✗ Cancel
-            </button>
-          </div>
-        </div>
-      )}
+
+          {aiError && (
+            <div className="ai-error-banner">Error: {aiError}</div>
+          )}
 
       {aiLoading && (
         <div className="ai-loading">

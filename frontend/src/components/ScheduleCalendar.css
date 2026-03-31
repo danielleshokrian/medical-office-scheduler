@@ -242,6 +242,16 @@
 
 .ai-loading p { color: var(--c-gray-400); margin: 0; font-size: 13px; }
 
+.ai-error-banner {
+  margin: 8px 0;
+  padding: 8px 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: var(--r);
+  color: var(--c-danger);
+  font-size: 13px;
+}
+
 /* ── Weekly grid ── */
 .schedule-grid {
   border: 1px solid var(--c-gray-200);
