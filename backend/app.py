@@ -755,46 +755,49 @@ def create_time_off_request():
                 return jsonify({'error': 'Nurse account is not linked to a staff member'}), 400
             data['staff_id'] = current_user.staff_id
 
-        if 'staff_id' not in data:
+        if 'staff_id' not in data or data['staff_id'] == '' or data['staff_id'] is None:
             return jsonify({'error': 'staff_id is required'}), 400
+
+        try:
+            staff_id = int(data['staff_id'])
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Invalid staff_id'}), 400
         if 'start_date' not in data:
             return jsonify({'error': 'start_date is required'}), 400
         if 'end_date' not in data:
             return jsonify({'error': 'end_date is required'}), 400
         
-        staff = Staff.query.get(data['staff_id'])
+        staff = Staff.query.get(staff_id)
         if not staff:
             return jsonify({'error': 'Staff member not found'}), 404
-        
+
         try:
             start_date = datetime.strptime(data['start_date'], '%Y-%m-%d').date()
             end_date = datetime.strptime(data['end_date'], '%Y-%m-%d').date()
         except ValueError:
             return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
-        
+
         today = date.today()
-        
+
         if end_date < start_date:
             return jsonify({'error': 'End date must be on or after start date'}), 400
-        
+
         if start_date < today:
             return jsonify({'error': 'Cannot request time off for past dates'}), 400
-        
+
         duration = (end_date - start_date).days + 1
         if duration > 30:
             return jsonify({'error': 'Time-off requests cannot exceed 30 days'}), 400
-        
+
         request_type = data.get('request_type', 'pto')
         if request_type not in ('pto', 'day_off'):
             return jsonify({'error': 'request_type must be pto or day_off'}), 400
 
-        # Scheduled day off must be a single day
         if request_type == 'day_off' and start_date != end_date:
             return jsonify({'error': 'Scheduled day off must be a single day'}), 400
 
-        # Check for overlapping requests of the same type
         overlapping = TimeOffRequest.query.filter(
-            TimeOffRequest.staff_id == data['staff_id'],
+            TimeOffRequest.staff_id == staff_id,
             TimeOffRequest.request_type == request_type,
             TimeOffRequest.status.in_(['pending', 'approved']),
             TimeOffRequest.start_date <= end_date,
@@ -805,10 +808,8 @@ def create_time_off_request():
             label = 'scheduled day off' if request_type == 'day_off' else 'time-off request'
             return jsonify({'error': f'An overlapping {label} already exists for that date'}), 400
 
-        initial_status = 'pending'
-
         new_request = TimeOffRequest(
-            staff_id=data['staff_id'],
+            staff_id=staff_id,
             start_date=start_date,
             end_date=end_date,
             reason=data.get('reason', ''),
