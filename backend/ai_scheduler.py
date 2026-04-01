@@ -224,14 +224,13 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
                 assigned.add(sub.id)
                 warnings.append(f"{date_str}: {sub.name} (GI Tech) covering Scope Room")
 
-        # ── GI Techs → active Procedure Rooms only ────────────────────────────
-        # Which rooms are open today?
+        # ── Which procedure rooms are open today? ─────────────────────────────
         if active_rooms and date_str in active_rooms:
             day_rooms = [r for r in ALL_PROC_ROOMS if r in active_rooms[date_str]]
         else:
             day_rooms = ALL_PROC_ROOMS
 
-        # Opener: Jess at 6:15; Curtis if Jess is off
+        # ── GI Techs — put exactly 1 per active room (opener slot first) ─────
         gi_pool = [s for s in gi_techs if s.id not in assigned]
         jess   = next((s for s in gi_pool if s.name == 'Jess'),   None)
         curtis = next((s for s in gi_pool if s.name == 'Curtis'), None)
@@ -242,37 +241,60 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
         gi_ptr = 0
         for room_name in day_rooms:
             room = area_map.get(room_name)
-            if not room:
+            if not room or gi_ptr >= len(gi_pool):
                 continue
-            filled = 0
-            while filled < 2 and gi_ptr < len(gi_pool):
-                gt = gi_pool[gi_ptr]
-                if gt.start_time:
-                    start = gt.start_time.strftime('%H:%M')
-                else:
-                    start = '07:00' if (gi_ptr % 2 == 0) else '07:30'
-                if gt.id not in assigned:
-                    all_shifts.append(_make_shift(gt, room, date_str, start))
-                    assigned.add(gt.id)
-                    filled += 1
-                gi_ptr += 1
-            if filled < 2:
-                warnings.append(f"{date_str}: {room_name} short-staffed ({filled}/2)")
+            gt = gi_pool[gi_ptr]
+            start = gt.start_time.strftime('%H:%M') if gt.start_time else (
+                '06:15' if gi_ptr == 0 else ('07:00' if gi_ptr % 2 == 0 else '07:30')
+            )
+            if gt.id not in assigned:
+                all_shifts.append(_make_shift(gt, room, date_str, start))
+                assigned.add(gt.id)
+            gi_ptr += 1
 
-        # ── RNs → Admitting + Recovery (rotate daily for fair distribution) ───
+        # ── RNs → Admitting (2) + Recovery (2), then rotate into rooms ───────
+        # Rotate RN order by day so early/late slots distribute fairly
         rn_pool = rns[:]
         if rn_pool:
             offset  = day_idx % len(rn_pool)
             rn_pool = rn_pool[offset:] + rn_pool[:offset]
 
-        for i, rn in enumerate(rn_pool):
-            if i >= len(RN_SLOTS):
-                break
+        # Mandatory admitting/recovery slots
+        for i, rn in enumerate(rn_pool[:4]):
             start, area_name = RN_SLOTS[i]
             area = area_map.get(area_name)
             if area and rn.id not in assigned:
                 all_shifts.append(_make_shift(rn, area, date_str, start))
                 assigned.add(rn.id)
+
+        # Extra RNs (5th+) rotate into procedure rooms as 2nd person.
+        # Rotate which room gets the RN each day so it varies across the week.
+        extra_rns = [rn for rn in rn_pool[4:] if rn.id not in assigned]
+        if extra_rns and day_rooms:
+            rotated_rooms = day_rooms[day_idx % len(day_rooms):] + day_rooms[:day_idx % len(day_rooms)]
+            for rn, room_name in zip(extra_rns, rotated_rooms):
+                room = area_map.get(room_name)
+                if room and rn.id not in assigned:
+                    all_shifts.append(_make_shift(rn, room, date_str, '07:00'))
+                    assigned.add(rn.id)
+
+        # ── Fill remaining procedure room slots (2nd person) with GI techs ───
+        for room_name in day_rooms:
+            room = area_map.get(room_name)
+            if not room:
+                continue
+            in_room = sum(1 for sh in all_shifts
+                          if sh['date'] == date_str and sh['area_id'] == room.id)
+            while in_room < 2 and gi_ptr < len(gi_pool):
+                gt = gi_pool[gi_ptr]
+                gi_ptr += 1
+                if gt.id not in assigned:
+                    start = gt.start_time.strftime('%H:%M') if gt.start_time else '07:30'
+                    all_shifts.append(_make_shift(gt, room, date_str, start))
+                    assigned.add(gt.id)
+                    in_room += 1
+            if in_room < 2:
+                warnings.append(f"{date_str}: {room_name} short-staffed ({in_room}/2)")
 
         # Coverage checks
         for area_name, req in [('Admitting', 2), ('Recovery', 2)]:
