@@ -28,8 +28,39 @@ function ScheduleCalendar() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
   const [aiInstruction, setAiInstruction] = useState('');
+  const [showRoomConfig, setShowRoomConfig] = useState(false);
 
+  const PROC_ROOMS = ['Procedure Room 1', 'Procedure Room 2', 'Procedure Room 3', 'Procedure Room 4'];
 
+  // roomConfig: { dateStr: { 'Procedure Room 1': true/false, ... } }
+  const buildDefaultRoomConfig = (monday) => {
+    const config = {};
+    for (let i = 0; i < 5; i++) {
+      const d = new Date(monday);
+      d.setDate(d.getDate() + i);
+      const ds = d.toISOString().split('T')[0];
+      config[ds] = {};
+      PROC_ROOMS.forEach(r => { config[ds][r] = true; });
+    }
+    return config;
+  };
+  const [roomConfig, setRoomConfig] = useState(() => buildDefaultRoomConfig(getMonday(new Date())));
+
+  const toggleRoom = (dateStr, room) => {
+    setRoomConfig(prev => ({
+      ...prev,
+      [dateStr]: { ...prev[dateStr], [room]: !prev[dateStr][room] }
+    }));
+  };
+
+  // Convert roomConfig to API format: { dateStr: [active room names] }
+  const buildActiveRooms = () => {
+    const result = {};
+    Object.entries(roomConfig).forEach(([ds, rooms]) => {
+      result[ds] = Object.entries(rooms).filter(([, on]) => on).map(([r]) => r);
+    });
+    return result;
+  };
 
   function getMonday(date) {
     const d = new Date(date);
@@ -184,12 +215,14 @@ const getCoverageStatus = (areaId, date) => {
     const newWeek = new Date(currentWeek);
     newWeek.setDate(currentWeek.getDate() - 7);
     setCurrentWeek(newWeek);
+    setRoomConfig(buildDefaultRoomConfig(getMonday(newWeek)));
   };
 
   const goToNextWeek = () => {
     const newWeek = new Date(currentWeek);
     newWeek.setDate(currentWeek.getDate() + 7);
     setCurrentWeek(newWeek);
+    setRoomConfig(buildDefaultRoomConfig(getMonday(newWeek)));
   };
 
   const goToCurrentWeek = () => {
@@ -286,7 +319,8 @@ const handleShiftSubmit = (data) => {
         body: JSON.stringify({
           week_start_date: weekStart,
           fill_empty_only: false,
-          ai_instruction: aiInstruction.trim() || null
+          ai_instruction: aiInstruction.trim() || null,
+          active_rooms: buildActiveRooms()
         })
       });
       if (!genRes.ok) {
@@ -332,7 +366,8 @@ const handleShiftSubmit = (data) => {
         body: JSON.stringify({
           week_start_date: weekStart,
           fill_empty_only: true,
-          ai_instruction: aiInstruction.trim() || null
+          ai_instruction: aiInstruction.trim() || null,
+          active_rooms: buildActiveRooms()
         })
       });
       if (!genRes.ok) {
@@ -543,14 +578,61 @@ const handleClearSchedule = async () => {
                 + Add Shift
               </button>
                       
+                {/* Room configuration panel */}
+                <div className="room-config-panel">
+                  <button
+                    className="room-config-toggle"
+                    onClick={() => setShowRoomConfig(v => !v)}
+                    disabled={aiLoading}
+                  >
+                    {showRoomConfig ? '▲' : '▼'} Active Rooms
+                  </button>
+                  {showRoomConfig && (
+                    <div className="room-config-grid">
+                      <table className="room-config-table">
+                        <thead>
+                          <tr>
+                            <th></th>
+                            {weekDates.map(d => (
+                              <th key={d.toISOString()}>
+                                {d.toLocaleDateString('en-US', { weekday: 'short' })}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {PROC_ROOMS.map(room => (
+                            <tr key={room}>
+                              <td className="room-config-label">{room}</td>
+                              {weekDates.map(d => {
+                                const ds = d.toISOString().split('T')[0];
+                                const on = roomConfig[ds]?.[room] ?? true;
+                                return (
+                                  <td key={ds} className="room-config-cell">
+                                    <input
+                                      type="checkbox"
+                                      checked={on}
+                                      onChange={() => toggleRoom(ds, room)}
+                                    />
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
                 <div className="ai-buttons">
                   <input
                     className="ai-instruction-input"
                     type="text"
-                    placeholder="Optional: any adjustments? e.g. 'Put Mary in Recovery on Monday'"
+                    placeholder="Optional: AI adjustment e.g. 'Keep Mary in Recovery all week'"
                     value={aiInstruction}
                     onChange={e => setAiInstruction(e.target.value)}
-                    disabled={aiLoading || previewMode}
+                    disabled={aiLoading}
                   />
                   <button
                     onClick={handleFillEmptyShifts}

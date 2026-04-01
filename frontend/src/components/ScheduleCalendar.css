@@ -242,6 +242,58 @@
 
 .ai-loading p { color: var(--c-gray-400); margin: 0; font-size: 13px; }
 
+/* ── Room config panel ── */
+.room-config-panel {
+  margin-bottom: 8px;
+}
+
+.room-config-toggle {
+  padding: 5px 12px;
+  font-size: 12px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r);
+  background: var(--c-surface);
+  color: var(--c-text-muted);
+  cursor: pointer;
+}
+.room-config-toggle:hover:not(:disabled) {
+  background: var(--c-bg);
+  color: var(--c-text);
+}
+
+.room-config-grid {
+  margin-top: 8px;
+  overflow-x: auto;
+}
+
+.room-config-table {
+  border-collapse: collapse;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.room-config-table th,
+.room-config-table td {
+  padding: 4px 10px;
+  text-align: center;
+  border: 1px solid var(--c-border);
+}
+.room-config-table th {
+  background: var(--c-surface);
+  font-weight: 600;
+  color: var(--c-text-muted);
+}
+.room-config-label {
+  text-align: left !important;
+  font-weight: 500;
+  color: var(--c-text);
+  padding-right: 16px !important;
+}
+.room-config-cell input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
 .ai-error-banner {
   margin: 8px 0;
   padding: 8px 12px;

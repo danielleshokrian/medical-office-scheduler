@@ -120,7 +120,8 @@ No markdown fences, no explanation."""
 
 
 def generate_weekly_schedule(week_start_date, fill_empty_only=False,
-                             existing_shifts=None, ai_instruction=None):
+                             existing_shifts=None, ai_instruction=None,
+                             active_rooms=None):
     """
     Deterministic rule-based weekly schedule for LICDH.
     Optionally applies an AI plain-English adjustment on top.
@@ -186,14 +187,16 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
         blocked.add((s.id, ds))
         off_count[ds] += 1
 
-    # ── RN slot definitions (in assignment order) ─────────────────────────────
+    # ── RN slot definitions — no Charge/Float in auto-schedule ──────────────
     RN_SLOTS = [
         ('06:15', 'Admitting'),
         ('06:30', 'Admitting'),
         ('07:30', 'Recovery'),
         ('07:30', 'Recovery'),
-        ('07:00', 'Charge'),
     ]
+
+    ALL_PROC_ROOMS = ['Procedure Room 1', 'Procedure Room 2',
+                      'Procedure Room 3', 'Procedure Room 4']
 
     # ── Build each day ────────────────────────────────────────────────────────
     for day_idx, day in enumerate(weekdays):
@@ -221,7 +224,13 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
                 assigned.add(sub.id)
                 warnings.append(f"{date_str}: {sub.name} (GI Tech) covering Scope Room")
 
-        # ── GI Techs → Procedure Rooms ────────────────────────────────────────
+        # ── GI Techs → active Procedure Rooms only ────────────────────────────
+        # Which rooms are open today?
+        if active_rooms and date_str in active_rooms:
+            day_rooms = [r for r in ALL_PROC_ROOMS if r in active_rooms[date_str]]
+        else:
+            day_rooms = ALL_PROC_ROOMS
+
         # Opener: Jess at 6:15; Curtis if Jess is off
         gi_pool = [s for s in gi_techs if s.id not in assigned]
         jess   = next((s for s in gi_pool if s.name == 'Jess'),   None)
@@ -230,10 +239,8 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
         if opener:
             gi_pool = [opener] + [s for s in gi_pool if s.id != opener.id]
 
-        proc_rooms = ['Procedure Room 1', 'Procedure Room 2',
-                      'Procedure Room 3', 'Procedure Room 4']
         gi_ptr = 0
-        for room_name in proc_rooms:
+        for room_name in day_rooms:
             room = area_map.get(room_name)
             if not room:
                 continue
@@ -243,7 +250,6 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
                 if gt.start_time:
                     start = gt.start_time.strftime('%H:%M')
                 else:
-                    # Alternate 7:00 / 7:30 for non-opener techs
                     start = '07:00' if (gi_ptr % 2 == 0) else '07:30'
                 if gt.id not in assigned:
                     all_shifts.append(_make_shift(gt, room, date_str, start))
@@ -253,8 +259,7 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
             if filled < 2:
                 warnings.append(f"{date_str}: {room_name} short-staffed ({filled}/2)")
 
-        # ── RNs → Admitting + Recovery + Charge ──────────────────────────────
-        # Rotate start position each day so early shifts distribute fairly
+        # ── RNs → Admitting + Recovery (rotate daily for fair distribution) ───
         rn_pool = rns[:]
         if rn_pool:
             offset  = day_idx % len(rn_pool)
