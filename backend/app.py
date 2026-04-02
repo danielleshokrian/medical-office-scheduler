@@ -6,7 +6,7 @@ from flask_jwt_extended import (
     jwt_required, get_jwt_identity, get_jwt
 )
 from flask_mail import Mail, Message
-from models import Staff, StaffArea, Shift, TimeOffRequest, AISuggestion, User
+from models import Staff, StaffArea, Shift, TimeOffRequest, AISuggestion, User, Clinic
 from db import db
 import os
 import json
@@ -39,7 +39,6 @@ allowed_origins = [
     "http://127.0.0.1:3000",
     "http://localhost",
     "http://127.0.0.1"
-
 ]
 
 cors_origins_env = os.getenv('CORS_ORIGINS', '')
@@ -59,9 +58,8 @@ if not app.debug:
 
     file_handler = RotatingFileHandler(
         'logs/scheduler.log',
-        maxBytes=10240000,  # 10MB
+        maxBytes=10240000,
         backupCount=10
-
     )
 
     file_handler.setFormatter(logging.Formatter(
@@ -70,9 +68,7 @@ if not app.debug:
 
     file_handler.setLevel(logging.INFO)
     app.logger.addHandler(file_handler)
-
     app.logger.setLevel(logging.INFO)
-
     app.logger.info('Medical Office Scheduler startup')
 
 
@@ -91,6 +87,13 @@ def require_roles(*allowed_roles):
         return None, jsonify({'error': 'Forbidden'}), 403
     return user, None, None
 
+
+def get_current_clinic_id():
+    """Read clinic_id from the JWT claims (no DB query needed)."""
+    claims = get_jwt()
+    return claims.get('clinic_id')
+
+
 @app.route('/auth/register', methods=['POST'])
 def register():
     """Register a new nurse account using the clinic invite code"""
@@ -101,9 +104,8 @@ def register():
         if not all(k in data for k in required):
             return jsonify({'error': 'name, email, password, and invite_code are required'}), 400
 
-        # Validate invite code
-        invite_code = app.config.get('CLINIC_INVITE_CODE', '')
-        if data['invite_code'].strip() != invite_code:
+        clinic = Clinic.query.filter_by(invite_code=data['invite_code'].strip()).first()
+        if not clinic:
             return jsonify({'error': 'Invalid invite code. Please contact your nurse administrator.'}), 403
 
         if len(data['password']) < 8:
@@ -111,20 +113,19 @@ def register():
 
         email = data['email'].strip().lower()
 
-        if User.query.filter_by(email=email).first():
+        if User.query.filter_by(clinic_id=clinic.id, email=email).first():
             return jsonify({'error': 'An account with this email already exists'}), 400
 
-        # Derive a unique username from the name
         base = data['name'].strip().lower().replace(' ', '.')
         username = base
         counter = 1
-        while User.query.filter_by(username=username).first():
+        while User.query.filter_by(clinic_id=clinic.id, username=username).first():
             username = f"{base}{counter}"
             counter += 1
 
-        # Try to link to existing staff record by first name (case-insensitive)
         first_name = data['name'].strip().split()[0]
         matched_staff = Staff.query.filter(
+            Staff.clinic_id == clinic.id,
             db.func.lower(Staff.name).like(db.func.lower(first_name) + '%')
         ).first()
 
@@ -132,6 +133,7 @@ def register():
             username=username,
             email=email,
             role='nurse',
+            clinic_id=clinic.id,
             staff_id=matched_staff.id if matched_staff else None
         )
         user.set_password(data['password'])
@@ -163,7 +165,7 @@ def login():
 
         access_token = create_access_token(
             identity=str(user.id),
-            additional_claims={'role': user.role}
+            additional_claims={'role': user.role, 'clinic_id': user.clinic_id}
         )
         refresh_token = create_refresh_token(identity=str(user.id))
 
@@ -189,7 +191,6 @@ def forgot_password():
 
         user = User.query.filter_by(email=email).first()
 
-        # Always return success to avoid leaking whether an email exists
         if user:
             token = secrets.token_urlsafe(32)
             user.reset_token = token
@@ -253,20 +254,19 @@ def reset_password():
 
 
 @app.route('/auth/refresh', methods=['POST'])
-#@jwt_required(refresh=True)
 def refresh():
     """Get new access token using refresh token"""
     current_user_id = get_jwt_identity()
     user = User.query.get(int(current_user_id))
-    
+
     if not user:
         return jsonify({'error': 'User not found'}), 404
-    
+
     access_token = create_access_token(
         identity=str(user.id),
-        additional_claims={'role': user.role}
+        additional_claims={'role': user.role, 'clinic_id': user.clinic_id}
     )
-    
+
     return jsonify({'access_token': access_token}), 200
 
 
@@ -276,24 +276,18 @@ def get_current_user_info():
     """Get current user info"""
     try:
         current_user_id = get_jwt_identity()
-        print("Authorization header:", request.headers.get("Authorization"))
-        print(f"Getting user with ID: {current_user_id}")  
-        
         user = User.query.get(int(current_user_id))
-        
+
         if not user:
             return jsonify({'error': 'User not found'}), 404
-        
-        return jsonify(user.to_dict()), 200
-        
-    except Exception as e:
-        print(f"Error in /auth/me: {str(e)}")  
-        import traceback
-        traceback.print_exc()  
-        return jsonify({'error': str(e)}), 500
-    
-@app.route('/health', methods=['GET'])
 
+        return jsonify(user.to_dict()), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/health', methods=['GET'])
 def health_check():
     try:
         db.session.execute(text('SELECT 1'))
@@ -311,25 +305,22 @@ def health_check():
             'timestamp': datetime.utcnow().isoformat()
         }), 500
 
+
 @app.route('/ready', methods=['GET'])
 def readiness_check():
     try:
         db.session.execute(text('SELECT 1'))
-
         return jsonify({
             'ready': True,
-            'checks': {
-                'database': 'ok'
-            }
+            'checks': {'database': 'ok'}
         }), 200
     except Exception as e:
         return jsonify({
             'ready': False,
-            'checks': {
-                'database': 'failed'
-            },
+            'checks': {'database': 'failed'},
             'error': str(e)
         }), 503
+
 
 @app.route('/')
 @jwt_required()
@@ -343,15 +334,16 @@ def home():
 @jwt_required()
 def get_staff():
     try:
+        clinic_id = get_current_clinic_id()
         role = request.args.get('role')
         active_only = request.args.get('active', 'true').lower() == 'true'
-        
-        query = Staff.query
+
+        query = Staff.query.filter_by(clinic_id=clinic_id)
         if active_only:
             query = query.filter_by(is_active=True)
         if role:
             query = query.filter_by(role=role)
-        
+
         staff_list = query.all()
         return jsonify([s.to_dict() for s in staff_list]), 200
     except Exception as e:
@@ -362,7 +354,8 @@ def get_staff():
 @jwt_required()
 def get_staff_by_id(id):
     try:
-        staff = Staff.query.get_or_404(id)
+        clinic_id = get_current_clinic_id()
+        staff = Staff.query.filter_by(id=id, clinic_id=clinic_id).first_or_404()
         return jsonify(staff.to_dict()), 200
     except Exception as e:
         return jsonify({'error': 'Staff member not found'}), 404
@@ -372,20 +365,18 @@ def get_staff_by_id(id):
 @jwt_required()
 def create_staff():
     try:
-        _, error_response, status = require_roles('nurse_admin')
+        user, error_response, status = require_roles('nurse_admin')
         if error_response:
             return error_response, status
 
         data = request.get_json()
-        
+
         start_time = None
         if data.get('start_time'):
             start_time = datetime.strptime(data['start_time'], '%H:%M').time()
 
-        required_days_off = data.get('required_days_off')
-        flexible_days_off = data.get('flexible_days_off')
-        
         new_staff = Staff(
+            clinic_id=user.clinic_id,
             name=data['name'],
             role=data['role'],
             shift_length=data['shift_length'],
@@ -413,20 +404,20 @@ def create_staff():
 @jwt_required()
 def update_staff(id):
     try:
-        _, error_response, status = require_roles('nurse_admin')
+        user, error_response, status = require_roles('nurse_admin')
         if error_response:
             return error_response, status
 
-        staff = Staff.query.get_or_404(id)
+        staff = Staff.query.filter_by(id=id, clinic_id=user.clinic_id).first_or_404()
         data = request.get_json()
-        
+
         if 'start_time' in data and data['start_time']:
             data['start_time'] = datetime.strptime(data['start_time'], '%H:%M').time()
-        
+
         for key, value in data.items():
-            if hasattr(staff, key):
+            if hasattr(staff, key) and key not in ('id', 'clinic_id'):
                 setattr(staff, key, value)
-        
+
         db.session.commit()
         return jsonify(staff.to_dict()), 200
     except ValueError as ve:
@@ -441,11 +432,11 @@ def update_staff(id):
 @jwt_required()
 def delete_staff(id):
     try:
-        _, error_response, status = require_roles('nurse_admin')
+        user, error_response, status = require_roles('nurse_admin')
         if error_response:
             return error_response, status
 
-        staff = Staff.query.get_or_404(id)
+        staff = Staff.query.filter_by(id=id, clinic_id=user.clinic_id).first_or_404()
         staff.is_active = False
         db.session.commit()
         return jsonify({'message': f'Staff member {staff.name} deactivated'}), 200
@@ -465,21 +456,21 @@ def get_staff_schedule(id):
         if current_user.role == 'nurse' and current_user.staff_id != id:
             return jsonify({'error': 'Nurses can only view their own schedule'}), 403
 
-        staff = Staff.query.get_or_404(id)
-        
+        staff = Staff.query.filter_by(id=id, clinic_id=current_user.clinic_id).first_or_404()
+
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
-        
+
         shifts = staff.shifts
-        
+
         if start_date:
             start = datetime.strptime(start_date, '%Y-%m-%d').date()
             shifts = [s for s in shifts if s.date >= start]
-        
+
         if end_date:
             end = datetime.strptime(end_date, '%Y-%m-%d').date()
             shifts = [s for s in shifts if s.date <= end]
-        
+
         return jsonify({
             'staff': staff.to_dict(),
             'shifts': [s.to_dict() for s in shifts]
@@ -494,7 +485,8 @@ def get_staff_schedule(id):
 @jwt_required()
 def get_areas():
     try:
-        areas = StaffArea.query.all()
+        clinic_id = get_current_clinic_id()
+        areas = StaffArea.query.filter_by(clinic_id=clinic_id).all()
         return jsonify([a.to_dict() for a in areas]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -504,7 +496,8 @@ def get_areas():
 @jwt_required()
 def get_area_by_id(id):
     try:
-        area = StaffArea.query.get_or_404(id)
+        clinic_id = get_current_clinic_id()
+        area = StaffArea.query.filter_by(id=id, clinic_id=clinic_id).first_or_404()
         return jsonify(area.to_dict()), 200
     except Exception as e:
         return jsonify({'error': 'Area not found'}), 404
@@ -514,12 +507,13 @@ def get_area_by_id(id):
 @jwt_required()
 def create_area():
     try:
-        _, error_response, status = require_roles('nurse_admin')
+        user, error_response, status = require_roles('nurse_admin')
         if error_response:
             return error_response, status
 
         data = request.get_json()
         new_area = StaffArea(
+            clinic_id=user.clinic_id,
             name=data['name'],
             required_rn_count=data.get('required_rn_count', 0),
             required_tech_count=data.get('required_tech_count', 0),
@@ -540,15 +534,16 @@ def create_area():
 @jwt_required()
 def get_shifts():
     try:
+        clinic_id = get_current_clinic_id()
         date_param = request.args.get('date')
         staff_id = request.args.get('staff_id')
         area_id = request.args.get('area_id')
-        
+
         query = Shift.query.options(
-        joinedload(Shift.staff_member),
-        joinedload(Shift.area)
-        )
-        
+            joinedload(Shift.staff_member),
+            joinedload(Shift.area)
+        ).filter(Shift.clinic_id == clinic_id)
+
         if date_param:
             query_date = datetime.strptime(date_param, '%Y-%m-%d').date()
             query = query.filter_by(date=query_date)
@@ -556,80 +551,85 @@ def get_shifts():
             query = query.filter_by(staff_id=staff_id)
         if area_id:
             query = query.filter_by(area_id=area_id)
-        
+
         shifts = query.all()
         return jsonify([s.to_dict() for s in shifts]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-    
+
+
 @app.route('/shifts', methods=['POST'])
 @jwt_required()
 def create_shift():
     try:
-        _, error_response, status = require_roles('nurse_admin')
+        user, error_response, status = require_roles('nurse_admin')
         if error_response:
             return error_response, status
 
+        clinic_id = user.clinic_id
         data = request.get_json()
-        
+
         if not all(k in data for k in ['staff_id', 'area_id', 'date', 'start_time', 'end_time']):
             return jsonify({'error': 'Missing required fields'}), 400
-        
+
         staff_id = data['staff_id']
         area_id = data['area_id']
         shift_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
         start_time = datetime.strptime(data['start_time'], '%H:%M').time()
         end_time = datetime.strptime(data['end_time'], '%H:%M').time()
-        
-        staff = Staff.query.get(staff_id)
+
+        staff = Staff.query.filter_by(id=staff_id, clinic_id=clinic_id).first()
         if not staff:
             return jsonify({'error': 'Staff member not found'}), 404
-        
-        area = StaffArea.query.get(area_id)
+
+        area = StaffArea.query.filter_by(id=area_id, clinic_id=clinic_id).first()
         if not area:
             return jsonify({'error': 'Area not found'}), 404
-        
-        day_of_week = shift_date.strftime('%A')  # Monday, Tuesday, etc.
+
+        day_of_week = shift_date.strftime('%A')
         required_days_off = json.loads(staff.required_days_off) if staff.required_days_off else []
-        
+
         if day_of_week in required_days_off:
             return jsonify({
                 'error': f'Cannot schedule {staff.name} on {day_of_week} - this is a required day off'
             }), 400
-        
+
         time_off_conflict = TimeOffRequest.query.filter(
             TimeOffRequest.staff_id == staff_id,
+            TimeOffRequest.clinic_id == clinic_id,
             TimeOffRequest.status == 'approved',
             TimeOffRequest.start_date <= shift_date,
             TimeOffRequest.end_date >= shift_date
         ).first()
-        
+
         if time_off_conflict:
             return jsonify({
                 'error': f'Cannot create shift: {staff.name} has approved time-off from {time_off_conflict.start_date} to {time_off_conflict.end_date}'
             }), 400
-        
+
         existing_shift = Shift.query.filter(
             Shift.staff_id == staff_id,
-            Shift.date == shift_date
+            Shift.date == shift_date,
+            Shift.clinic_id == clinic_id
         ).first()
-        
+
         if existing_shift:
             return jsonify({'error': f'{staff.name} is already scheduled on {shift_date}'}), 400
-        
+
         new_shift = Shift(
+            clinic_id=clinic_id,
             staff_id=staff_id,
             area_id=area_id,
             date=shift_date,
             start_time=start_time,
             end_time=end_time
         )
-        
+
         db.session.add(new_shift)
         db.session.commit()
-        
+
         return jsonify(new_shift.to_dict()), 201
-        
+
     except ValueError as e:
         return jsonify({'error': f'Invalid date/time format: {str(e)}'}), 400
     except Exception as e:
@@ -641,7 +641,8 @@ def create_shift():
 @jwt_required()
 def get_shift_by_id(id):
     try:
-        shift = Shift.query.get_or_404(id)
+        clinic_id = get_current_clinic_id()
+        shift = Shift.query.filter_by(id=id, clinic_id=clinic_id).first_or_404()
         return jsonify(shift.to_dict()), 200
     except Exception as e:
         return jsonify({'error': 'Shift not found'}), 404
@@ -651,33 +652,31 @@ def get_shift_by_id(id):
 @jwt_required()
 def update_shift(id):
     try:
-        _, error_response, status = require_roles('nurse_admin')
+        user, error_response, status = require_roles('nurse_admin')
         if error_response:
             return error_response, status
 
-        shift = Shift.query.get_or_404(id)
+        shift = Shift.query.filter_by(id=id, clinic_id=user.clinic_id).first_or_404()
         data = request.get_json()
-        
+
         staff_id = data.get('staff_id', shift.staff_id)
         area_id = data.get('area_id', shift.area_id)
-        date = datetime.strptime(data['date'], '%Y-%m-%d').date() if 'date' in data else shift.date
+        shift_date = datetime.strptime(data['date'], '%Y-%m-%d').date() if 'date' in data else shift.date
         start_time = datetime.strptime(data['start_time'], '%H:%M').time() if 'start_time' in data else shift.start_time
         end_time = datetime.strptime(data['end_time'], '%H:%M').time() if 'end_time' in data else shift.end_time
         override_validation = data.get('override_validation', False)
-        
-        # VALIDATE SHIFT (unless overridden)
+
         if not override_validation:
-            is_valid, error_message = validate_shift(staff_id, area_id, date, start_time, end_time, shift_id=id)
-            
+            is_valid, error_message = validate_shift(staff_id, area_id, shift_date, start_time, end_time, shift_id=id)
             if not is_valid:
                 return jsonify({'error': error_message}), 400
-        
+
         shift.staff_id = staff_id
         shift.area_id = area_id
-        shift.date = date
+        shift.date = shift_date
         shift.start_time = start_time
         shift.end_time = end_time
-        
+
         db.session.commit()
         return jsonify(shift.to_dict()), 200
     except Exception as e:
@@ -689,11 +688,11 @@ def update_shift(id):
 @jwt_required()
 def delete_shift(id):
     try:
-        _, error_response, status = require_roles('nurse_admin')
+        user, error_response, status = require_roles('nurse_admin')
         if error_response:
             return error_response, status
 
-        shift = Shift.query.get_or_404(id)
+        shift = Shift.query.filter_by(id=id, clinic_id=user.clinic_id).first_or_404()
         db.session.delete(shift)
         db.session.commit()
         return jsonify({'message': 'Shift deleted successfully'}), 200
@@ -712,16 +711,18 @@ def get_time_off_requests():
         if error_response:
             return error_response, status
 
-        requests = TimeOffRequest.query.options(
+        query = TimeOffRequest.query.options(
             joinedload(TimeOffRequest.staff_member)
-        )
-        if current_user.role == 'nurse':
-            requests = requests.filter(TimeOffRequest.staff_id == current_user.staff_id)
+        ).filter(TimeOffRequest.clinic_id == current_user.clinic_id)
 
-        requests = requests.all()
+        if current_user.role == 'nurse':
+            query = query.filter(TimeOffRequest.staff_id == current_user.staff_id)
+
+        requests = query.all()
         return jsonify([r.to_dict() for r in requests]), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
 @app.route('/time-off/<int:id>', methods=['GET'])
 @jwt_required()
@@ -732,7 +733,7 @@ def get_time_off_request_by_id(id):
 
     request_obj = TimeOffRequest.query.options(
         joinedload(TimeOffRequest.staff_member)
-    ).get_or_404(id)
+    ).filter_by(id=id, clinic_id=current_user.clinic_id).first_or_404()
 
     if current_user.role == 'nurse' and request_obj.staff_id != current_user.staff_id:
         return jsonify({'error': 'Forbidden'}), 403
@@ -748,8 +749,9 @@ def create_time_off_request():
         if error_response:
             return error_response, status
 
+        clinic_id = current_user.clinic_id
         data = request.get_json()
-        
+
         if current_user.role == 'nurse':
             if not current_user.staff_id:
                 return jsonify({'error': 'Nurse account is not linked to a staff member'}), 400
@@ -762,12 +764,13 @@ def create_time_off_request():
             staff_id = int(data['staff_id'])
         except (ValueError, TypeError):
             return jsonify({'error': 'Invalid staff_id'}), 400
+
         if 'start_date' not in data:
             return jsonify({'error': 'start_date is required'}), 400
         if 'end_date' not in data:
             return jsonify({'error': 'end_date is required'}), 400
-        
-        staff = Staff.query.get(staff_id)
+
+        staff = Staff.query.filter_by(id=staff_id, clinic_id=clinic_id).first()
         if not staff:
             return jsonify({'error': 'Staff member not found'}), 404
 
@@ -798,6 +801,7 @@ def create_time_off_request():
 
         overlapping = TimeOffRequest.query.filter(
             TimeOffRequest.staff_id == staff_id,
+            TimeOffRequest.clinic_id == clinic_id,
             TimeOffRequest.request_type == request_type,
             TimeOffRequest.status.in_(['pending', 'approved']),
             TimeOffRequest.start_date <= end_date,
@@ -808,7 +812,11 @@ def create_time_off_request():
             label = 'scheduled day off' if request_type == 'day_off' else 'time-off request'
             return jsonify({'error': f'An overlapping {label} already exists for that date'}), 400
 
+        # Admins auto-approve; nurses submit as pending
+        initial_status = 'approved' if current_user.role == 'nurse_admin' else 'pending'
+
         new_request = TimeOffRequest(
+            clinic_id=clinic_id,
             staff_id=staff_id,
             start_date=start_date,
             end_date=end_date,
@@ -821,7 +829,7 @@ def create_time_off_request():
         db.session.commit()
 
         return jsonify(new_request.to_dict()), 201
-        
+
     except KeyError as e:
         return jsonify({'error': f'Missing required field: {str(e)}'}), 400
     except Exception as e:
@@ -833,26 +841,25 @@ def create_time_off_request():
 @jwt_required()
 def update_time_off_request(id):
     try:
-        current_user, error_response, status = require_roles('nurse_admin')
+        user, error_response, status = require_roles('nurse_admin')
         if error_response:
             return error_response, status
 
-        request_obj = TimeOffRequest.query.get_or_404(id)
+        request_obj = TimeOffRequest.query.filter_by(id=id, clinic_id=user.clinic_id).first_or_404()
         data = request.get_json()
-        
+
         if 'status' in data:
             valid_statuses = ['pending', 'approved', 'denied']
             if data['status'] not in valid_statuses:
                 return jsonify({'error': f'Status must be one of: {", ".join(valid_statuses)}'}), 400
-        
             request_obj.status = data['status']
 
         if 'reason' in data:
             request_obj.reason = data['reason']
-        
+
         db.session.commit()
         return jsonify(request_obj.to_dict()), 200
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
@@ -866,7 +873,9 @@ def delete_time_off_request(id):
         if error_response:
             return error_response, status
 
-        request_obj = TimeOffRequest.query.get_or_404(id)
+        request_obj = TimeOffRequest.query.filter_by(
+            id=id, clinic_id=current_user.clinic_id
+        ).first_or_404()
 
         if current_user.role == 'nurse':
             if request_obj.staff_id != current_user.staff_id:
@@ -880,24 +889,27 @@ def delete_time_off_request(id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
-    
+
+
 @app.route('/coverage/<int:area_id>/<string:date>', methods=['GET'])
 @jwt_required()
 def get_area_coverage(area_id, date):
     try:
+        clinic_id = get_current_clinic_id()
         coverage_date = datetime.strptime(date, '%Y-%m-%d').date()
-        
+
+        area = StaffArea.query.filter_by(id=area_id, clinic_id=clinic_id).first_or_404()
+
         shifts = Shift.query.options(
             joinedload(Shift.staff_member)
         ).filter(
             Shift.area_id == area_id,
+            Shift.clinic_id == clinic_id,
             Shift.date == coverage_date
         ).all()
-        
-        area = StaffArea.query.get_or_404(area_id)
-        
+
         is_covered, warnings = check_area_coverage(area_id, coverage_date)
-        
+
         return jsonify({
             'area_id': area_id,
             'area_name': area.name,
@@ -908,27 +920,30 @@ def get_area_coverage(area_id, date):
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-    
+
+
 @app.route('/ai/generate-schedule', methods=['POST', 'OPTIONS'])
 @jwt_required()
 def ai_generate_schedule():
     if request.method == 'OPTIONS':
         return '', 200
     try:
-        _, error_response, status = require_roles('nurse_admin')
+        user, error_response, status = require_roles('nurse_admin')
         if error_response:
             return error_response, status
 
+        clinic_id = user.clinic_id
         data = request.get_json()
         week_start = datetime.strptime(data['week_start_date'], '%Y-%m-%d').date()
         fill_empty_only = data.get('fill_empty_only', False)
-        ai_instruction  = (data.get('ai_instruction') or '').strip()
-        active_rooms    = data.get('active_rooms') or None  # {date_str: [room_names]}
+        ai_instruction = (data.get('ai_instruction') or '').strip()
+        active_rooms = data.get('active_rooms') or None
 
         existing_shifts = None
         if fill_empty_only:
             week_end = week_start + timedelta(days=4)
             existing_shifts = Shift.query.filter(
+                Shift.clinic_id == clinic_id,
                 Shift.date >= week_start,
                 Shift.date <= week_end
             ).all()
@@ -936,28 +951,30 @@ def ai_generate_schedule():
         result = generate_weekly_schedule(
             week_start, fill_empty_only, existing_shifts,
             ai_instruction=ai_instruction or None,
-            active_rooms=active_rooms
+            active_rooms=active_rooms,
+            clinic_id=clinic_id
         )
-        
+
         if not result['success']:
             return jsonify({'error': result['message']}), 500
-        
+
         suggestion = AISuggestion(
+            clinic_id=clinic_id,
             week_start_date=week_start,
             suggested_schedule=json.dumps(result['shifts']),
-            reasoning='AI-generated schedule',
+            reasoning='Generated schedule',
             constraints_met='All constraints evaluated',
             accepted=False
         )
         db.session.add(suggestion)
         db.session.commit()
-        
+
         return jsonify({
             'suggestion_id': suggestion.id,
             'shifts': result['shifts'],
             'message': result['message']
         }), 200
-        
+
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -965,30 +982,33 @@ def ai_generate_schedule():
 @app.route('/ai/apply-schedule', methods=['POST', 'OPTIONS'])
 @jwt_required()
 def apply_ai_schedule():
-    """Apply AI suggestions by creating actual shifts"""
+    """Apply generated schedule by creating actual shifts"""
     if request.method == 'OPTIONS':
         return '', 200
-        
+
     try:
-        _, error_response, status = require_roles('nurse_admin')
+        user, error_response, status = require_roles('nurse_admin')
         if error_response:
             return error_response, status
 
+        clinic_id = user.clinic_id
         data = request.get_json()
         shifts_data = data['shifts']
         clear_existing = data.get('clear_existing', False)
         week_start = datetime.strptime(data['week_start_date'], '%Y-%m-%d').date()
-        
+
         if clear_existing:
             week_end = week_start + timedelta(days=4)
             Shift.query.filter(
+                Shift.clinic_id == clinic_id,
                 Shift.date >= week_start,
                 Shift.date <= week_end
             ).delete()
-        
+
         created_shifts = []
         for shift_data in shifts_data:
             new_shift = Shift(
+                clinic_id=clinic_id,
                 staff_id=shift_data['staff_id'],
                 area_id=shift_data['area_id'],
                 date=datetime.strptime(shift_data['date'], '%Y-%m-%d').date(),
@@ -997,22 +1017,18 @@ def apply_ai_schedule():
             )
             db.session.add(new_shift)
             created_shifts.append(new_shift)
-        
+
         db.session.commit()
-        
+
         return jsonify({
             'message': f'Successfully created {len(created_shifts)} shifts',
             'shifts': [s.to_dict() for s in created_shifts]
         }), 200
-        
+
     except Exception as e:
         db.session.rollback()
-        print(f"Error applying schedule: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':
     app.run(port=5001, debug=True)
-

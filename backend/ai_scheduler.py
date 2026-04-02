@@ -1,5 +1,5 @@
 """
-Weekly schedule generator for LICDH GI Lab.
+Weekly schedule generator for a GI Lab clinic.
 - Deterministic rule-based algorithm builds the base schedule
 - Optional plain-English AI adjustment layer on top (requires OPENAI_API_KEY)
 """
@@ -10,7 +10,7 @@ from datetime import timedelta
 from db import db
 from models import Staff, StaffArea, TimeOffRequest
 
-# ── OpenAI — loaded lazily so a missing/broken install never crashes the backend ──
+# -- OpenAI -- loaded lazily so a missing/broken install never crashes the backend --
 def _get_openai_client():
     try:
         from openai import OpenAI
@@ -20,7 +20,7 @@ def _get_openai_client():
         return None
 
 
-# ── Low-level shift builder (module-level to avoid closure issues) ─────────────
+# -- Low-level shift builder (module-level to avoid closure issues) --
 def _make_shift(staff, area, date_str, start_str):
     h, m = int(start_str[:2]), int(start_str[3:])
     return {
@@ -40,7 +40,7 @@ def apply_ai_adjustments(shifts, instruction, staff_list, area_list):
     """
     client = _get_openai_client()
     if not client:
-        return shifts, "OpenAI not configured — base schedule kept"
+        return shifts, "OpenAI not configured -- base schedule kept"
 
     staff_by_id = {s.id: s for s in staff_list}
     area_by_id  = {a.id: a for a in area_list}
@@ -116,39 +116,48 @@ No markdown fences, no explanation."""
 
     except Exception as e:
         print(f"[scheduler] AI adjustment failed: {e}")
-        return shifts, f"AI adjustment failed — base schedule kept"
+        return shifts, "AI adjustment failed -- base schedule kept"
 
 
 def generate_weekly_schedule(week_start_date, fill_empty_only=False,
                              existing_shifts=None, ai_instruction=None,
-                             active_rooms=None):
+                             active_rooms=None, clinic_id=None):
     """
-    Deterministic rule-based weekly schedule for LICDH.
+    Deterministic rule-based weekly schedule for a GI Lab clinic.
     Optionally applies an AI plain-English adjustment on top.
     Returns: {success, shifts, message, validation_errors}
     """
     warnings   = []
     all_shifts = []
 
-    # ── Load ──────────────────────────────────────────────────────────────────
-    staff_list  = Staff.query.filter_by(is_active=True).all()
-    area_map    = {a.name: a for a in StaffArea.query.all()}
-    week_end    = week_start_date + timedelta(days=4)
-    weekdays    = [week_start_date + timedelta(days=i) for i in range(5)]
+    # -- Load --
+    staff_query = Staff.query.filter_by(is_active=True)
+    area_query  = StaffArea.query
+    if clinic_id is not None:
+        staff_query = staff_query.filter_by(clinic_id=clinic_id)
+        area_query  = area_query.filter_by(clinic_id=clinic_id)
+    staff_list = staff_query.all()
+    area_map   = {a.name: a for a in area_query.all()}
+
+    week_end = week_start_date + timedelta(days=4)
+    weekdays = [week_start_date + timedelta(days=i) for i in range(5)]
 
     if not staff_list:
         return {'success': False, 'shifts': [],
-                'message': 'No active staff found. Run setup_licdh.py first.',
+                'message': 'No active staff found. Run the clinic setup script first.',
                 'validation_errors': []}
 
-    # ── Build blocked set: (staff_id, 'YYYY-MM-DD') ───────────────────────────
+    # -- Build blocked set: (staff_id, 'YYYY-MM-DD') --
     blocked = set()
 
-    for t in TimeOffRequest.query.filter(
+    tor_query = TimeOffRequest.query.filter(
         TimeOffRequest.status == 'approved',
         TimeOffRequest.start_date <= week_end,
         TimeOffRequest.end_date >= week_start_date
-    ).all():
+    )
+    if clinic_id is not None:
+        tor_query = tor_query.filter(TimeOffRequest.clinic_id == clinic_id)
+    for t in tor_query.all():
         cur = t.start_date
         while cur <= t.end_date:
             if week_start_date <= cur <= week_end:
@@ -162,7 +171,7 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
                     if d.strftime('%A') == day_name:
                         blocked.add((s.id, d.strftime('%Y-%m-%d')))
 
-    # ── Assign 1 rotating day off per week for every 4-day/week non-per-diem staff ──
+    # -- Assign 1 rotating day off per week for every 4-day/week non-per-diem staff --
     four_day = [s for s in staff_list if s.days_per_week == 4 and not s.is_per_diem]
 
     off_count = {d.strftime('%Y-%m-%d'): 0 for d in weekdays}
@@ -187,7 +196,7 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
         blocked.add((s.id, ds))
         off_count[ds] += 1
 
-    # ── RN slot definitions — no Charge/Float in auto-schedule ──────────────
+    # -- RN slot definitions -- no Charge/Float in auto-schedule --
     RN_SLOTS = [
         ('06:15', 'Admitting'),
         ('06:30', 'Admitting'),
@@ -198,7 +207,7 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
     ALL_PROC_ROOMS = ['Procedure Room 1', 'Procedure Room 2',
                       'Procedure Room 3', 'Procedure Room 4']
 
-    # ── Build each day ────────────────────────────────────────────────────────
+    # -- Build each day --
     for day_idx, day in enumerate(weekdays):
         date_str = day.strftime('%Y-%m-%d')
 
@@ -209,7 +218,7 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
 
         assigned = set()
 
-        # ── Scope Room ────────────────────────────────────────────────────────
+        # -- Scope Room --
         scope_area = area_map.get('Scope Room')
         for st in scope_techs:
             if scope_area and st.id not in assigned:
@@ -224,13 +233,13 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
                 assigned.add(sub.id)
                 warnings.append(f"{date_str}: {sub.name} (GI Tech) covering Scope Room")
 
-        # ── Which procedure rooms are open today? ─────────────────────────────
+        # -- Which procedure rooms are open today? --
         if active_rooms and date_str in active_rooms:
             day_rooms = [r for r in ALL_PROC_ROOMS if r in active_rooms[date_str]]
         else:
             day_rooms = ALL_PROC_ROOMS
 
-        # ── GI Techs — put exactly 1 per active room (opener slot first) ─────
+        # -- GI Techs -- put exactly 1 per active room (opener slot first) --
         gi_pool = [s for s in gi_techs if s.id not in assigned]
         jess   = next((s for s in gi_pool if s.name == 'Jess'),   None)
         curtis = next((s for s in gi_pool if s.name == 'Curtis'), None)
@@ -252,14 +261,12 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
                 assigned.add(gt.id)
             gi_ptr += 1
 
-        # ── RNs → Admitting (2) + Recovery (2), then rotate into rooms ───────
-        # Rotate RN order by day so early/late slots distribute fairly
+        # -- RNs -> Admitting (2) + Recovery (2), then rotate into rooms --
         rn_pool = rns[:]
         if rn_pool:
             offset  = day_idx % len(rn_pool)
             rn_pool = rn_pool[offset:] + rn_pool[:offset]
 
-        # Mandatory admitting/recovery slots
         for i, rn in enumerate(rn_pool[:4]):
             start, area_name = RN_SLOTS[i]
             area = area_map.get(area_name)
@@ -267,8 +274,7 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
                 all_shifts.append(_make_shift(rn, area, date_str, start))
                 assigned.add(rn.id)
 
-        # Extra RNs (5th+) rotate into procedure rooms as 2nd person.
-        # Rotate which room gets the RN each day so it varies across the week.
+        # Extra RNs (5th+) rotate into procedure rooms as 2nd person
         extra_rns = [rn for rn in rn_pool[4:] if rn.id not in assigned]
         if extra_rns and day_rooms:
             rotated_rooms = day_rooms[day_idx % len(day_rooms):] + day_rooms[:day_idx % len(day_rooms)]
@@ -278,7 +284,7 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
                     all_shifts.append(_make_shift(rn, room, date_str, '07:00'))
                     assigned.add(rn.id)
 
-        # ── Fill remaining procedure room slots (2nd person) with GI techs ───
+        # -- Fill remaining procedure room slots (2nd person) with GI techs --
         for room_name in day_rooms:
             room = area_map.get(room_name)
             if not room:
@@ -303,9 +309,9 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
                 n = sum(1 for sh in all_shifts
                         if sh['date'] == date_str and sh['area_id'] == a.id)
                 if n < req:
-                    warnings.append(f"{date_str}: {area_name} has {n}/{req} RNs — add per diem if needed")
+                    warnings.append(f"{date_str}: {area_name} has {n}/{req} RNs -- add per diem if needed")
 
-    # ── Optional AI adjustment ─────────────────────────────────────────────────
+    # -- Optional AI adjustment --
     ai_note = None
     final_shifts = all_shifts
     if ai_instruction and ai_instruction.strip():
@@ -319,7 +325,7 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
     if warnings:
         base_msg += f" ({len(warnings)} warnings)"
     if ai_note and "failed" not in ai_note:
-        base_msg += " — AI adjusted"
+        base_msg += " -- AI adjusted"
 
     return {
         'success': True,
