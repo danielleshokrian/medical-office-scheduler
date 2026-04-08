@@ -274,11 +274,19 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
                 all_shifts.append(_make_shift(rn, area, date_str, start))
                 assigned.add(rn.id)
 
-        # Extra RNs (5th+) rotate into procedure rooms as 2nd person
+        # Extra RNs (5th+) go into procedure rooms: empty rooms first, then as 2nd person
         extra_rns = [rn for rn in rn_pool[4:] if rn.id not in assigned]
         if extra_rns and day_rooms:
-            rotated_rooms = day_rooms[day_idx % len(day_rooms):] + day_rooms[:day_idx % len(day_rooms)]
-            for rn, room_name in zip(extra_rns, rotated_rooms):
+            room_occupancy = {
+                r: sum(1 for sh in all_shifts
+                       if sh['date'] == date_str and sh['area_id'] == area_map[r].id)
+                for r in day_rooms if area_map.get(r)
+            }
+            # Rotate for fairness, then stable-sort by occupancy so empty rooms come first
+            rotated = day_rooms[day_idx % len(day_rooms):] + day_rooms[:day_idx % len(day_rooms)]
+            eligible = [r for r in rotated if area_map.get(r) and room_occupancy.get(r, 0) < 2]
+            eligible.sort(key=lambda r: room_occupancy.get(r, 0))
+            for rn, room_name in zip(extra_rns, eligible):
                 room = area_map.get(room_name)
                 if room and rn.id not in assigned:
                     all_shifts.append(_make_shift(rn, room, date_str, '07:00'))
