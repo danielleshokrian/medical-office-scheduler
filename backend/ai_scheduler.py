@@ -63,7 +63,18 @@ def apply_ai_adjustments(shifts, instruction, staff_list, area_list):
         for s in staff_list
     ]
 
+    # Build a day-name → date map so the AI can resolve "Monday", "Tuesday", etc.
+    if shifts:
+        from datetime import datetime as _dt
+        all_dates = sorted({_dt.strptime(sh['date'], '%Y-%m-%d').date() for sh in shifts})
+        day_map = {d.strftime('%A'): d.strftime('%Y-%m-%d') for d in all_dates}
+    else:
+        day_map = {}
+
     prompt = f"""You are adjusting a pre-built medical GI lab weekly schedule.
+
+WEEK DATE MAP (use these exact dates when the instruction mentions day names like "Monday"):
+{json.dumps(day_map, indent=2)}
 
 CURRENT SCHEDULE:
 {json.dumps(readable, indent=2)}
@@ -74,12 +85,14 @@ STAFF ROSTER:
 ADJUSTMENT REQUESTED:
 {instruction}
 
-RULES YOU MUST NOT VIOLATE:
-1. No staff member may appear twice on the same date
-2. Scope Room must have exactly 2 people every day
-3. Admitting must have exactly 2 RNs every day
-4. Recovery must have exactly 2 RNs every day
-5. Only use staff IDs and area IDs from the lists above
+HOW TO APPLY THE ADJUSTMENT:
+- The adjustment request is the top priority. Honor it exactly.
+- Make only the minimum changes needed to fulfill the request.
+- If a staff member is not currently scheduled on a day, you MAY add them.
+- If adding someone creates a coverage conflict, swap or remove another staff member on that same date to compensate — do not simply ignore the request.
+- Each staff member may appear at most once per date (not once per week).
+- Only use staff IDs and area IDs that appear in the lists above.
+- Try to keep Admitting at 2 RNs, Recovery at 2 RNs, Scope Room at 2 staff — but adjust as needed to honor the request.
 
 Return ONLY the complete modified schedule as a JSON array with these exact fields:
 [{{"staff_id": 1, "area_id": 2, "date": "YYYY-MM-DD", "start_time": "HH:MM", "end_time": "HH:MM"}}]
