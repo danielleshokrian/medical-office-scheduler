@@ -130,6 +130,18 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
     warnings   = []
     all_shifts = []
 
+    # -- Pre-process existing shifts so fill mode respects what's already scheduled --
+    # existing_staff[date_str] = set of staff_ids already scheduled that day
+    # existing_area_count[date_str][area_id] = number of people already in that area
+    existing_staff      = {}
+    existing_area_count = {}
+    if fill_empty_only and existing_shifts:
+        for sh in existing_shifts:
+            ds = sh.date.strftime('%Y-%m-%d')
+            existing_staff.setdefault(ds, set()).add(sh.staff_id)
+            existing_area_count.setdefault(ds, {})
+            existing_area_count[ds][sh.area_id] = existing_area_count[ds].get(sh.area_id, 0) + 1
+
     # -- Load --
     staff_query = Staff.query.filter_by(is_active=True)
     area_query  = StaffArea.query
@@ -216,7 +228,15 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
         gi_techs    = sorted([s for s in today if s.role == 'GI_Tech'],                           key=lambda s: s.name)
         scope_techs = sorted([s for s in today if s.role == 'Scope_Tech'],                        key=lambda s: s.name)
 
-        assigned = set()
+        # Seed assigned with staff already on the schedule for this day
+        assigned = set(existing_staff.get(date_str, set()))
+
+        # Helper: total people in an area including pre-existing shifts
+        def area_count(area_id):
+            pre  = existing_area_count.get(date_str, {}).get(area_id, 0)
+            new  = sum(1 for sh in all_shifts
+                       if sh['date'] == date_str and sh['area_id'] == area_id)
+            return pre + new
 
         # -- Scope Room --
         scope_area = area_map.get('Scope Room')
@@ -267,19 +287,24 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
             offset  = day_idx % len(rn_pool)
             rn_pool = rn_pool[offset:] + rn_pool[:offset]
 
-        for i, rn in enumerate(rn_pool[:4]):
-            start, area_name = RN_SLOTS[i]
+        rn_pool_iter = iter(rn_pool)
+        for start, area_name in RN_SLOTS:
             area = area_map.get(area_name)
-            if area and rn.id not in assigned:
+            if not area:
+                continue
+            # Skip this slot if the area is already at capacity from existing shifts
+            if area_count(area.id) >= 2:
+                continue
+            rn = next((r for r in rn_pool_iter if r.id not in assigned), None)
+            if rn:
                 all_shifts.append(_make_shift(rn, area, date_str, start))
                 assigned.add(rn.id)
 
-        # Extra RNs (5th+) go into procedure rooms: empty rooms first, then as 2nd person
-        extra_rns = [rn for rn in rn_pool[4:] if rn.id not in assigned]
+        # Extra RNs: anyone in rn_pool not yet assigned (Admitting/Recovery slots may have been skipped)
+        extra_rns = [rn for rn in rn_pool if rn.id not in assigned]
         if extra_rns and day_rooms:
             room_occupancy = {
-                r: sum(1 for sh in all_shifts
-                       if sh['date'] == date_str and sh['area_id'] == area_map[r].id)
+                r: area_count(area_map[r].id)
                 for r in day_rooms if area_map.get(r)
             }
             # Rotate for fairness, then stable-sort by occupancy so empty rooms come first
@@ -297,8 +322,7 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
             room = area_map.get(room_name)
             if not room:
                 continue
-            in_room = sum(1 for sh in all_shifts
-                          if sh['date'] == date_str and sh['area_id'] == room.id)
+            in_room = area_count(room.id)
             while in_room < 2 and gi_ptr < len(gi_pool):
                 gt = gi_pool[gi_ptr]
                 gi_ptr += 1
@@ -314,8 +338,7 @@ def generate_weekly_schedule(week_start_date, fill_empty_only=False,
         for area_name, req in [('Admitting', 2), ('Recovery', 2)]:
             a = area_map.get(area_name)
             if a:
-                n = sum(1 for sh in all_shifts
-                        if sh['date'] == date_str and sh['area_id'] == a.id)
+                n = area_count(a.id)
                 if n < req:
                     warnings.append(f"{date_str}: {area_name} has {n}/{req} RNs -- add per diem if needed")
 
